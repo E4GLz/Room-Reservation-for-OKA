@@ -338,140 +338,222 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
 
       {isAdmin ? (
         <div className="grid gap-6 xl:grid-cols-3">
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-950">Pending approvals</h3>
-              <p className="mt-1 text-sm text-slate-500">Requests that likely need admin attention next.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/planner?status=PENDING&view=list">
-                <Button variant="secondary">Review pending</Button>
-              </Link>
-              <AlertCircle className="h-5 w-5 text-[var(--accent)]" />
-            </div>
-          </div>
-          <div className="mt-4 space-y-3">
-            {data.pendingApprovals.length === 0 ? (
-              <StatePanel title="Nothing waiting" message="All current requests have already been reviewed." />
-            ) : (
-              data.pendingApprovals.map((reservation) => <ReservationCard key={reservation.id} reservation={reservation} />)
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-950">Your bookings this month</h3>
-              <p className="mt-1 text-sm text-slate-500">Booking activity for the currently signed-in user.</p>
-            </div>
-            <UserRound className="h-5 w-5 text-[var(--accent)]" />
-          </div>
-          <div className="mt-4 rounded-[24px] p-5" style={{ background: userCardGradient }}>
-            <div className="flex items-end justify-between gap-4">
+          <Card>
+            <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm text-slate-500">Reservations under your account</p>
-                <p className="mt-3 text-5xl font-semibold tracking-tight text-slate-950">{currentUserActivity.total}</p>
+                <h3 className="text-lg font-semibold text-slate-950">Pending approvals</h3>
+                <p className="mt-1 text-sm text-slate-500">Requests that likely need admin attention next.</p>
               </div>
-              <div className="rounded-2xl bg-white p-3 text-amber-600 shadow-sm ring-1 ring-[var(--line)]">
-                <ClipboardList className="h-6 w-6" />
+              <div className="flex items-center gap-2">
+                <Link href="/planner?status=PENDING&view=list">
+                  <Button variant="secondary">Review pending</Button>
+                </Link>
+                <AlertCircle className="h-5 w-5 text-[var(--accent)]" />
               </div>
             </div>
-            <p className="mt-3 text-sm text-slate-600">
-              Confirmed: {currentUserActivity.confirmed} | Pending: {currentUserActivity.pending}
-            </p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[20px] bg-white px-4 py-3 ring-1 ring-[var(--line)]">
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Share of monthly total</p>
-                <p className="mt-2 text-xl font-semibold text-slate-950">
-                  {currentUserShare}%
+            <div className="mt-4 space-y-3">
+              {data.pendingApprovals.length === 0 ? (
+                <StatePanel title="Nothing waiting" message="All current requests have already been reviewed." />
+              ) : (
+                data.pendingApprovals.map((reservation) => (
+                  <ReservationCard key={reservation.id} reservation={reservation} />
+                ))
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-950">Your bookings this month</h3>
+                <p className="mt-1 text-sm text-slate-500">Booking activity for the currently signed-in user.</p>
+              </div>
+              <UserRound className="h-5 w-5 text-[var(--accent)]" />
+            </div>
+            <div className="mt-4 rounded-[24px] p-5" style={{ background: userCardGradient }}>
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <p className="text-sm text-slate-500">Reservations under your account</p>
+                  <p className="mt-3 text-5xl font-semibold tracking-tight text-slate-950">
+                    {currentUserActivity.total}
+                  </p>
+                </div>
+                <div className="rounded-2xl bg-white p-3 text-amber-600 shadow-sm ring-1 ring-[var(--line)]">
+                  <ClipboardList className="h-6 w-6" />
+                </div>
+              </div>
+              <p className="mt-3 text-sm text-slate-600">
+                Confirmed: {currentUserActivity.confirmed} | Pending: {currentUserActivity.pending}
+              </p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[20px] bg-white px-4 py-3 ring-1 ring-[var(--line)]">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Share of monthly total</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-950">{currentUserShare}%</p>
+                </div>
+                <div className="rounded-[20px] bg-white px-4 py-3 ring-1 ring-[var(--line)]">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Upcoming reminder window</p>
+                  <p className="mt-2 text-xl font-semibold text-slate-950">
+                    {data.adminReminderConfig.hours}h
+                  </p>
+                </div>
+              </div>
+              <div className="mt-5 h-2.5 rounded-full bg-white/90 ring-1 ring-[var(--line)]">
+                <div
+                  className="h-2.5 rounded-full"
+                  style={{
+                    background: userProgressGradient,
+                    width: `${data.totals.totalThisMonth === 0 ? 0 : Math.max(currentUserShare, 8)}%`
+                  }}
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-950">Admin reminder queue</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Upcoming meeting reminders prepared for admin email delivery.
                 </p>
               </div>
-              <div className="rounded-[20px] bg-white px-4 py-3 ring-1 ring-[var(--line)]">
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Upcoming reminder window</p>
-                <p className="mt-2 text-xl font-semibold text-slate-950">{data.adminReminderConfig.hours}h</p>
+              <div className="flex items-center gap-2">
+                {user?.role === "ADMIN" ? (
+                  <Button
+                    variant="secondary"
+                    onClick={handleSendReminders}
+                    disabled={
+                      sendingReminders ||
+                      data.upcomingAdminReminders.length === 0 ||
+                      !hasAdminReminderRecipients
+                    }
+                  >
+                    {sendingReminders ? "Sending..." : "Send reminder emails"}
+                  </Button>
+                ) : null}
+                <Mail className="h-5 w-5 text-[var(--accent)]" />
               </div>
             </div>
-            <div className="mt-5 h-2.5 rounded-full bg-white/90 ring-1 ring-[var(--line)]">
-              <div
-                className="h-2.5 rounded-full"
-                style={{
-                  background: userProgressGradient,
-                  width: `${data.totals.totalThisMonth === 0 ? 0 : Math.max(currentUserShare, 8)}%`
-                }}
-              />
+            <div className="mt-4 space-y-3">
+              <div className="rounded-[18px] bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                <p className="font-medium text-slate-900">Recipients</p>
+                <p className="mt-1">
+                  {hasAdminReminderRecipients
+                    ? data.adminReminderConfig.recipientEmails.join(", ")
+                    : "No active admin email found."}
+                </p>
+                <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500">
+                  Reminder lead time: {data.adminReminderConfig.hours} hours
+                </p>
+              </div>
+              {sendMessage ? (
+                <div className="rounded-[18px] bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                  {sendMessage}
+                </div>
+              ) : null}
+              {data.upcomingAdminReminders.length === 0 ? (
+                <StatePanel
+                  title="No reminder emails queued"
+                  message="No confirmed upcoming bookings fall inside the configured reminder window."
+                />
+              ) : (
+                data.upcomingAdminReminders.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">{notification.subject}</p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          {notification.reservation.chargedDepartment}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/bookings/${notification.reservation.id}`}
+                        className="text-slate-400 transition hover:text-slate-700"
+                      >
+                        <ArrowUpRight className="h-4 w-4" />
+                      </Link>
+                    </div>
+                    <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.14em] text-slate-500">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock3 className="h-3.5 w-3.5" />
+                        {notification.reservation.startTime} - {notification.reservation.endTime}
+                      </span>
+                      <span>{notification.reservation.room.name}</span>
+                      <span>{formatLongDate(notification.reservation.reservationDate)}</span>
+                      <span>{notification.startsInHours}h remaining</span>
+                    </div>
+                    {notification.reservation.foodServiceRequired ? (
+                      <div className="mt-3 rounded-[16px] bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
+                        <div className="flex items-center gap-2 font-medium">
+                          <UtensilsCrossed className="h-4 w-4" />
+                          Food service requested
+                        </div>
+                        <p className="mt-1 text-xs uppercase tracking-[0.12em] text-amber-700">
+                          {notification.reservation.foodServiceLocation || "Location not set"}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                ))
+              )}
             </div>
-          </div>
-        </Card>
+          </Card>
+        </div>
+      ) : null}
 
+      {isAdmin ? (
         <Card>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-slate-950">Admin reminder queue</h3>
-              <p className="mt-1 text-sm text-slate-500">Upcoming meeting reminders prepared for admin email delivery.</p>
+              <h3 className="text-lg font-semibold text-slate-950">Next agenda</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                What staff should be preparing for today and tomorrow.
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              {user?.role === "ADMIN" ? (
-                <Button
-                  variant="secondary"
-                  onClick={handleSendReminders}
-                  disabled={sendingReminders || data.upcomingAdminReminders.length === 0 || !hasAdminReminderRecipients}
-                >
-                  {sendingReminders ? "Sending..." : "Send reminder emails"}
-                </Button>
-              ) : null}
-              <Mail className="h-5 w-5 text-[var(--accent)]" />
-            </div>
+            <DoorOpen className="h-5 w-5 text-[var(--accent)]" />
           </div>
-          <div className="mt-4 space-y-3">
-            <div className="rounded-[18px] bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <p className="font-medium text-slate-900">Recipients</p>
-              <p className="mt-1">
-                {hasAdminReminderRecipients
-                  ? data.adminReminderConfig.recipientEmails.join(", ")
-                  : "No active admin email found."}
-              </p>
-              <p className="mt-2 text-xs uppercase tracking-[0.12em] text-slate-500">
-                Reminder lead time: {data.adminReminderConfig.hours} hours
-              </p>
-            </div>
-            {sendMessage ? (
-              <div className="rounded-[18px] bg-slate-50 px-4 py-3 text-sm text-slate-700">
-                {sendMessage}
+          <div className="mt-4 grid gap-3 xl:grid-cols-2">
+            {data.upcoming.length === 0 ? (
+              <div className="xl:col-span-2">
+                <StatePanel
+                  title="No immediate bookings"
+                  message="There are no upcoming reservations in the next two days."
+                />
               </div>
-            ) : null}
-            {data.upcomingAdminReminders.length === 0 ? (
-              <StatePanel title="No reminder emails queued" message="No confirmed upcoming bookings fall inside the configured reminder window." />
             ) : (
-              data.upcomingAdminReminders.map((notification) => (
-                <div key={notification.id} className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4">
+              data.upcoming.map((reservation) => (
+                <div key={reservation.id} className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-slate-950">{notification.subject}</p>
-                      <p className="mt-1 text-sm text-slate-600">{notification.reservation.chargedDepartment}</p>
+                      <p className="text-sm font-semibold text-slate-950">{reservation.guestCompany}</p>
+                      <p className="mt-1 text-sm text-slate-600">{reservation.chargedDepartment}</p>
                     </div>
-                    <Link href={`/bookings/${notification.reservation.id}`} className="text-slate-400 transition hover:text-slate-700">
+                    <Link
+                      href={`/bookings/${reservation.id}`}
+                      className="text-slate-400 transition hover:text-slate-700"
+                    >
                       <ArrowUpRight className="h-4 w-4" />
                     </Link>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.14em] text-slate-500">
                     <span className="inline-flex items-center gap-1.5">
                       <Clock3 className="h-3.5 w-3.5" />
-                      {notification.reservation.startTime} - {notification.reservation.endTime}
+                      {reservation.startTime} - {reservation.endTime}
                     </span>
-                    <span>{notification.reservation.room.name}</span>
-                    <span>{formatLongDate(notification.reservation.reservationDate)}</span>
-                    <span>{notification.startsInHours}h remaining</span>
+                    <span>{reservation.room.name}</span>
+                    <span>{formatLongDate(reservation.reservationDate)}</span>
                   </div>
-                  {notification.reservation.foodServiceRequired ? (
+                  {reservation.foodServiceRequired ? (
                     <div className="mt-3 rounded-[16px] bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
                       <div className="flex items-center gap-2 font-medium">
                         <UtensilsCrossed className="h-4 w-4" />
                         Food service requested
                       </div>
                       <p className="mt-1 text-xs uppercase tracking-[0.12em] text-amber-700">
-                        {notification.reservation.foodServiceLocation || "Location not set"}
+                        {reservation.foodServiceLocation || "Location not set"}
                       </p>
                     </div>
                   ) : null}
@@ -480,86 +562,38 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
             )}
           </div>
         </Card>
-        </div>
       ) : null}
 
       {isAdmin ? (
         <Card>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-950">Next agenda</h3>
-            <p className="mt-1 text-sm text-slate-500">What staff should be preparing for today and tomorrow.</p>
-          </div>
-          <DoorOpen className="h-5 w-5 text-[var(--accent)]" />
-        </div>
-        <div className="mt-4 grid gap-3 xl:grid-cols-2">
-          {data.upcoming.length === 0 ? (
-            <div className="xl:col-span-2">
-              <StatePanel title="No immediate bookings" message="There are no upcoming reservations in the next two days." />
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-950">Busiest booking dates</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Specific dates that may need extra prep capacity.
+              </p>
             </div>
-          ) : (
-            data.upcoming.map((reservation) => (
-              <div key={reservation.id} className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-950">{reservation.guestCompany}</p>
-                    <p className="mt-1 text-sm text-slate-600">{reservation.chargedDepartment}</p>
-                  </div>
-                  <Link href={`/bookings/${reservation.id}`} className="text-slate-400 transition hover:text-slate-700">
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Link>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.14em] text-slate-500">
-                  <span className="inline-flex items-center gap-1.5">
-                    <Clock3 className="h-3.5 w-3.5" />
-                    {reservation.startTime} - {reservation.endTime}
-                  </span>
-                  <span>{reservation.room.name}</span>
-                  <span>{formatLongDate(reservation.reservationDate)}</span>
-                </div>
-                {reservation.foodServiceRequired ? (
-                  <div className="mt-3 rounded-[16px] bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
-                    <div className="flex items-center gap-2 font-medium">
-                      <UtensilsCrossed className="h-4 w-4" />
-                      Food service requested
-                    </div>
-                    <p className="mt-1 text-xs uppercase tracking-[0.12em] text-amber-700">
-                      {reservation.foodServiceLocation || "Location not set"}
-                    </p>
-                  </div>
-                ) : null}
-              </div>
-            ))
-          )}
-        </div>
-        </Card>
-      ) : null}
-
-      {isAdmin ? (
-        <Card>
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h3 className="text-lg font-semibold text-slate-950">Busiest booking dates</h3>
-            <p className="mt-1 text-sm text-slate-500">Specific dates that may need extra prep capacity.</p>
+            <CalendarClock className="h-5 w-5 text-[var(--accent)]" />
           </div>
-          <CalendarClock className="h-5 w-5 text-[var(--accent)]" />
-        </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-5">
-          {hasBusiestDays ? (
-            data.busiestDays.map((day, index) => (
-              <div key={day.date} className="rounded-[18px] bg-slate-50 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Rank #{index + 1}</p>
-                <p className="mt-3 text-sm font-medium text-slate-900">{day.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-slate-950">{day.total}</p>
-                <p className="text-xs text-slate-500">bookings</p>
+          <div className="mt-4 grid gap-3 lg:grid-cols-5">
+            {hasBusiestDays ? (
+              data.busiestDays.map((day, index) => (
+                <div key={day.date} className="rounded-[18px] bg-slate-50 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-slate-500">Rank #{index + 1}</p>
+                  <p className="mt-3 text-sm font-medium text-slate-900">{day.label}</p>
+                  <p className="mt-2 text-2xl font-semibold text-slate-950">{day.total}</p>
+                  <p className="text-xs text-slate-500">bookings</p>
+                </div>
+              ))
+            ) : (
+              <div className="lg:col-span-5">
+                <StatePanel
+                  title="No peak dates yet"
+                  message="When bookings are added, the busiest dates of the month will surface here."
+                />
               </div>
-            ))
-          ) : (
-            <div className="lg:col-span-5">
-              <StatePanel title="No peak dates yet" message="When bookings are added, the busiest dates of the month will surface here." />
-            </div>
-          )}
-        </div>
+            )}
+          </div>
         </Card>
       ) : null}
     </div>
