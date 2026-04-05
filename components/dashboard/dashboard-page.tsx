@@ -43,6 +43,7 @@ import type { DashboardPayload } from "@/lib/types";
 
 export function DashboardPage({ data }: { data: DashboardPayload }) {
   const { user } = useSession();
+  const isAdmin = user?.role === "ADMIN";
   const [sendingReminders, setSendingReminders] = useState(false);
   const [sendMessage, setSendMessage] = useState("");
   const pieColors = ["#16a34a", "#f59e0b", "#eab308", "#f97316", "#ef4444"];
@@ -64,6 +65,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
   const currentUserShare =
     data.totals.totalThisMonth === 0 ? 0 : Math.round((currentUserActivity.total / data.totals.totalThisMonth) * 100);
   const hasAdminReminderRecipients = data.adminReminderConfig.recipientEmails.length > 0;
+  const ownUpcoming = data.upcoming.filter((reservation) => reservation.requesterEmail === user?.email);
 
   async function handleSendReminders() {
     setSendingReminders(true);
@@ -92,171 +94,250 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.95fr]">
           <div>
             <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">Operations snapshot</p>
-            <h3 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight">
-              {data.totals.todayCount} bookings today, {data.totals.pendingThisMonth} still waiting for approval.
-            </h3>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-white/78">
-              The busiest room this month is {data.highlights.busiestRoom.name}, while average building utilization is {data.highlights.averageUtilization}% across {data.totals.activeRooms} active rooms.
-            </p>
+            {isAdmin ? (
+              <>
+                <h3 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight">
+                  {data.totals.todayCount} bookings today, {data.totals.pendingThisMonth} still waiting for approval.
+                </h3>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/78">
+                  The busiest room this month is {data.highlights.busiestRoom.name}, while average building utilization is {data.highlights.averageUtilization}% across {data.totals.activeRooms} active rooms.
+                </p>
+              </>
+            ) : (
+              <>
+                <h3 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight">
+                  {currentUserActivity.total} bookings are under your account this month.
+                </h3>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/78">
+                  Use the planner to follow the room schedule and use My Bookings to review your own booking history and statuses.
+                </p>
+              </>
+            )}
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href="/planner">
                 <Button variant="secondary" className="shadow-sm">
                   Open planner
                 </Button>
               </Link>
-              <Link href="/bookings/new">
-                <Button variant="secondary" className="shadow-sm">
-                  Create booking
-                </Button>
-              </Link>
+              {isAdmin ? (
+                <Link href="/bookings/new">
+                  <Button variant="secondary" className="shadow-sm">
+                    Create booking
+                  </Button>
+                </Link>
+              ) : (
+                <Link href="/my-bookings">
+                  <Button variant="secondary" className="shadow-sm">
+                    My bookings
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <MiniStat
-              label="Highest utilization"
-              value={data.highlights.highestUtilizationRoom.name}
-              hint={`${data.highlights.highestUtilizationRoom.utilization}% occupied days`}
-            />
-            <MiniStat
-              label="Month over month"
-              value={`${data.highlights.monthOverMonthDelta > 0 ? "+" : ""}${data.highlights.monthOverMonthDelta}%`}
-              hint="Compared with last month"
-            />
-            <MiniStat label="Lowest utilization" value={data.highlights.leastUsedRoom.name} hint={`${data.highlights.leastUsedRoom.utilization}% used days`} />
-            <MiniStat label="Most active weekday" value={peakWeekday} hint="Pattern from this month's reservations" />
+            {isAdmin ? (
+              <>
+                <MiniStat
+                  label="Highest utilization"
+                  value={data.highlights.highestUtilizationRoom.name}
+                  hint={`${data.highlights.highestUtilizationRoom.utilization}% occupied days`}
+                />
+                <MiniStat
+                  label="Month over month"
+                  value={`${data.highlights.monthOverMonthDelta > 0 ? "+" : ""}${data.highlights.monthOverMonthDelta}%`}
+                  hint="Compared with last month"
+                />
+                <MiniStat label="Lowest utilization" value={data.highlights.leastUsedRoom.name} hint={`${data.highlights.leastUsedRoom.utilization}% used days`} />
+                <MiniStat label="Most active weekday" value={peakWeekday} hint="Pattern from this month's reservations" />
+              </>
+            ) : (
+              <>
+                <MiniStat label="Confirmed" value={String(currentUserActivity.confirmed)} hint="Bookings confirmed under your account" />
+                <MiniStat label="Pending" value={String(currentUserActivity.pending)} hint="Reservations still awaiting admin action" />
+                <MiniStat label="Share of month" value={`${currentUserShare}%`} hint="Your portion of this month's activity" />
+                <MiniStat label="Upcoming" value={String(ownUpcoming.length)} hint="Bookings coming up soon under your account" />
+              </>
+            )}
           </div>
         </div>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-4">
         <KpiCard
-          label="Bookings this month"
-          value={data.totals.totalThisMonth}
-          meta={`${data.totals.activeRooms} active rooms`}
+          label={isAdmin ? "Bookings this month" : "My bookings this month"}
+          value={isAdmin ? data.totals.totalThisMonth : currentUserActivity.total}
+          meta={isAdmin ? `${data.totals.activeRooms} active rooms` : `${ownUpcoming.length} upcoming under your account`}
           icon={<CalendarClock className="h-5 w-5" />}
           tone="accent"
         />
         <KpiCard
-          label="Pending approvals"
-          value={data.totals.pendingThisMonth}
-          meta="Requests waiting on confirmation"
+          label={isAdmin ? "Pending approvals" : "My pending"}
+          value={isAdmin ? data.totals.pendingThisMonth : currentUserActivity.pending}
+          meta={isAdmin ? "Requests waiting on confirmation" : "Waiting for admin review"}
           icon={<TimerReset className="h-5 w-5" />}
           tone="warning"
         />
         <KpiCard
-          label="Confirmed bookings"
-          value={data.totals.confirmedThisMonth}
-          meta={`${data.totals.todayCount} on today's agenda`}
+          label={isAdmin ? "Confirmed bookings" : "My confirmed"}
+          value={isAdmin ? data.totals.confirmedThisMonth : currentUserActivity.confirmed}
+          meta={isAdmin ? `${data.totals.todayCount} on today's agenda` : "Approved and active"}
           icon={<CheckCheck className="h-5 w-5" />}
           tone="soft"
         />
         <KpiCard
-          label="Cancelled this month"
-          value={data.totals.cancelledThisMonth}
-          meta={`${data.totals.tomorrowCount} scheduled tomorrow`}
+          label={isAdmin ? "Cancelled this month" : "My schedule share"}
+          value={isAdmin ? data.totals.cancelledThisMonth : currentUserShare}
+          meta={isAdmin ? `${data.totals.tomorrowCount} scheduled tomorrow` : "Percent of this month's total"}
           icon={<CircleOff className="h-5 w-5" />}
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        <ChartCard title="Reservation trend" description="Rolling six-month view of confirmed and pending activity">
-          {hasTrendData ? (
-            <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data.monthlyTrend}>
-                  <defs>
-                    <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="5%" stopColor={trendColor} stopOpacity={0.35} />
-                      <stop offset="95%" stopColor={trendColor} stopOpacity={0.03} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(24,33,43,0.08)" />
-                  <XAxis dataKey="label" tickLine={false} axisLine={false} />
-                  <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                  <Tooltip />
-                  <Area type="monotone" dataKey="total" stroke={trendColor} strokeWidth={3} fill="url(#trendFill)" />
-                </AreaChart>
-              </ResponsiveContainer>
+      {!isAdmin ? (
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-950">My upcoming bookings</h3>
+                <p className="mt-1 text-sm text-slate-500">Only reservations created under your account are shown here.</p>
+              </div>
+              <DoorOpen className="h-5 w-5 text-[var(--accent)]" />
             </div>
-          ) : (
-            <StatePanel title="No trend data yet" message="This chart will fill in as reservations are added for the last six months." />
-          )}
-        </ChartCard>
-
-        <ChartCard title="Reservation type mix" description="Where this month's demand is coming from">
-          {hasTypeData ? (
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={data.bookingsByEventType} dataKey="total" nameKey="type" innerRadius={62} outerRadius={100} paddingAngle={3}>
-                    {data.bookingsByEventType.map((entry, index) => (
-                      <Cell key={entry.type} fill={pieColors[index % pieColors.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ paddingTop: 18 }} />
-                </PieChart>
-              </ResponsiveContainer>
+            <div className="mt-4 space-y-3">
+              {ownUpcoming.length === 0 ? (
+                <StatePanel title="No upcoming bookings" message="Your future reservations will appear here once an admin schedules them under your account." />
+              ) : (
+                ownUpcoming.map((reservation) => <ReservationCard key={reservation.id} reservation={reservation} />)
+              )}
             </div>
-          ) : (
-            <StatePanel title="No reservation mix yet" message="Once bookings are created, this view will show which reservation types are driving demand." />
-          )}
-        </ChartCard>
-      </div>
+          </Card>
 
-      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <ChartCard title="Room demand" description="Most frequently booked rooms this month">
-          {hasRoomDemand ? (
-            <div className="space-y-3">
-              {data.bookingsByRoom.map((room) => {
-                return (
-                  <div key={room.name} className="rounded-[20px] bg-slate-50 p-3">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-slate-800">{room.name}</p>
-                      <p className="text-sm font-semibold text-slate-950">{room.total}</p>
-                    </div>
-                    <div className="h-2.5 rounded-full bg-slate-200">
-                      <div
-                        className="h-2.5 rounded-full"
-                        style={{ background: roomDemandGradient, width: `${Math.max((room.total / maxRoomDemand) * 100, 6)}%` }}
-                      />
-                    </div>
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-950">Quick access</h3>
+                <p className="mt-1 text-sm text-slate-500">Use these pages for daily staff access without admin controls.</p>
+              </div>
+              <UserRound className="h-5 w-5 text-[var(--accent)]" />
+            </div>
+            <div className="mt-4 space-y-3">
+              <Link href="/planner">
+                <Button variant="secondary" className="w-full justify-start">Open schedule planner</Button>
+              </Link>
+              <Link href="/my-bookings">
+                <Button variant="secondary" className="w-full justify-start">Open my booking history</Button>
+              </Link>
+              <div className="rounded-[18px] bg-slate-50 px-4 py-4 text-sm text-slate-600">
+                Room setup, booking creation, edits, cancellations, users, and settings remain managed from the admin side.
+              </div>
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      {isAdmin ? (
+        <>
+          <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+            <ChartCard title="Reservation trend" description="Rolling six-month view of confirmed and pending activity">
+              {hasTrendData ? (
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={data.monthlyTrend}>
+                      <defs>
+                        <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
+                          <stop offset="5%" stopColor={trendColor} stopOpacity={0.35} />
+                          <stop offset="95%" stopColor={trendColor} stopOpacity={0.03} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(24,33,43,0.08)" />
+                      <XAxis dataKey="label" tickLine={false} axisLine={false} />
+                      <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
+                      <Tooltip />
+                      <Area type="monotone" dataKey="total" stroke={trendColor} strokeWidth={3} fill="url(#trendFill)" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <StatePanel title="No trend data yet" message="This chart will fill in as reservations are added for the last six months." />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Reservation type mix" description="Where this month's demand is coming from">
+              {hasTypeData ? (
+                <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={data.bookingsByEventType} dataKey="total" nameKey="type" innerRadius={62} outerRadius={100} paddingAngle={3}>
+                        {data.bookingsByEventType.map((entry, index) => (
+                          <Cell key={entry.type} fill={pieColors[index % pieColors.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                      <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ paddingTop: 18 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <StatePanel title="No reservation mix yet" message="Once bookings are created, this view will show which reservation types are driving demand." />
+              )}
+            </ChartCard>
+          </div>
+
+          <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+            <ChartCard title="Room demand" description="Most frequently booked rooms this month">
+              {hasRoomDemand ? (
+                <div className="space-y-3">
+                  {data.bookingsByRoom.map((room) => {
+                    return (
+                      <div key={room.name} className="rounded-[20px] bg-slate-50 p-3">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <p className="text-sm font-medium text-slate-800">{room.name}</p>
+                          <p className="text-sm font-semibold text-slate-950">{room.total}</p>
+                        </div>
+                        <div className="h-2.5 rounded-full bg-slate-200">
+                          <div
+                            className="h-2.5 rounded-full"
+                            style={{ background: roomDemandGradient, width: `${Math.max((room.total / maxRoomDemand) * 100, 6)}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <StatePanel title="No room demand yet" message="Room demand will appear here as soon as bookings are registered for the month." />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Weekday booking pattern" description="Helps identify the most heavily requested day pattern">
+              {hasWeekdayData ? (
+                <>
+                  <div className="h-[28rem]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={data.weekdayPattern} layout="vertical" margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(24,33,43,0.08)" />
+                        <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
+                        <YAxis type="category" dataKey="day" width={42} tickLine={false} axisLine={false} />
+                        <Tooltip />
+                        <Bar dataKey="total" radius={[0, 12, 12, 0]} barSize={26} fill={weekdayPatternColor} />
+                      </BarChart>
+                    </ResponsiveContainer>
                   </div>
-                );
-              })}
-            </div>
-          ) : (
-            <StatePanel title="No room demand yet" message="Room demand will appear here as soon as bookings are registered for the month." />
-          )}
-        </ChartCard>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <InsightPill label="Peak day" value={peakWeekday} />
+                    <InsightPill label="Quietest day" value={quietWeekday} />
+                  </div>
+                </>
+              ) : (
+                <StatePanel title="No booking pattern yet" message="This chart will show the busiest weekdays once reservations exist for the current month." />
+              )}
+            </ChartCard>
+          </div>
+        </>
+      ) : null}
 
-        <ChartCard title="Weekday booking pattern" description="Helps identify the most heavily requested day pattern">
-          {hasWeekdayData ? (
-            <>
-              <div className="h-[28rem]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={data.weekdayPattern} layout="vertical" margin={{ top: 8, right: 12, bottom: 8, left: 8 }}>
-                    <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="rgba(24,33,43,0.08)" />
-                    <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
-                    <YAxis type="category" dataKey="day" width={42} tickLine={false} axisLine={false} />
-                    <Tooltip />
-                    <Bar dataKey="total" radius={[0, 12, 12, 0]} barSize={26} fill={weekdayPatternColor} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="grid gap-3 lg:grid-cols-2">
-                <InsightPill label="Peak day" value={peakWeekday} />
-                <InsightPill label="Quietest day" value={quietWeekday} />
-              </div>
-            </>
-          ) : (
-            <StatePanel title="No booking pattern yet" message="This chart will show the busiest weekdays once reservations exist for the current month." />
-          )}
-        </ChartCard>
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-3">
+      {isAdmin ? (
+        <div className="grid gap-6 xl:grid-cols-3">
         <Card>
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -399,9 +480,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
             )}
           </div>
         </Card>
-      </div>
+        </div>
+      ) : null}
 
-      <Card>
+      {isAdmin ? (
+        <Card>
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-950">Next agenda</h3>
@@ -449,9 +532,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
             ))
           )}
         </div>
-      </Card>
+        </Card>
+      ) : null}
 
-      <Card>
+      {isAdmin ? (
+        <Card>
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-lg font-semibold text-slate-950">Busiest booking dates</h3>
@@ -475,7 +560,8 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
             </div>
           )}
         </div>
-      </Card>
+        </Card>
+      ) : null}
     </div>
   );
 }

@@ -41,6 +41,18 @@ export function toTitleCase(value: string) {
     .join(" ");
 }
 
+export function getRoleLabel(role: string | null | undefined) {
+  if (role === "ADMIN") {
+    return "Admin";
+  }
+
+  if (role === "STANDARD") {
+    return "Staff";
+  }
+
+  return role ?? "Unknown";
+}
+
 export function toInputDate(value: Date) {
   return format(value, "yyyy-MM-dd");
 }
@@ -202,7 +214,7 @@ export function reservationCanBeEditedByUser(
     return false;
   }
 
-  return user.role === "ADMIN" || reservation.requesterEmail === user.email;
+  return user.role === "ADMIN";
 }
 
 export function describeNotification(type: "created" | "updated" | "cancelled" | "conflict", context: string) {

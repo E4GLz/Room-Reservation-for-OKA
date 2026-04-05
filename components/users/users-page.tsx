@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatePanel } from "@/components/ui/state-panel";
 import { useSession } from "@/components/providers/session-provider";
+import { getRoleLabel } from "@/lib/utils";
 import type { UserRecord } from "@/lib/types";
 
 function initialForm(user?: UserRecord | null) {
@@ -98,7 +99,7 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
               <label className="mb-2 block text-sm font-medium text-slate-700">Role</label>
               <Select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as UserRole })}>
                 <option value={UserRole.ADMIN}>Admin</option>
-                <option value={UserRole.STANDARD}>Standard</option>
+                <option value={UserRole.STANDARD}>Staff</option>
               </Select>
             </div>
             <div>
@@ -135,7 +136,7 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
                 <p className="mt-2 text-sm text-slate-600">{entry.phoneNumber || "No phone number set"}</p>
               </div>
               <div className="text-right">
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{entry.role}</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{getRoleLabel(entry.role)}</p>
                 <p className="mt-1 text-xs font-medium text-slate-600">{entry.status}</p>
               </div>
             </div>

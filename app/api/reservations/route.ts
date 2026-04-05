@@ -18,6 +18,7 @@ export async function GET(request: Request) {
   const roomId = searchParams.get("roomId");
   const status = searchParams.get("status");
   const search = searchParams.get("search");
+  const requesterEmail = searchParams.get("requesterEmail");
 
   let reservations;
 
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
             }
           : {}),
         ...(roomId ? { roomId } : {}),
+        ...(requesterEmail ? { requesterEmail } : {}),
         ...(status ? { bookingStatus: status as BookingStatus } : {}),
         ...(search
           ? {
@@ -68,6 +70,7 @@ export async function GET(request: Request) {
             }
           : {}),
         ...(roomId ? { roomId } : {}),
+        ...(requesterEmail ? { requesterEmail } : {}),
         ...(status ? { bookingStatus: status as BookingStatus } : {}),
         ...(search
           ? {

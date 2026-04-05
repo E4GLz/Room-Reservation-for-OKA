@@ -20,7 +20,26 @@ export function BookingDetailPage({
 }) {
   const router = useRouter();
   const { user } = useSession();
+  const canView = user?.role === "ADMIN" || reservation.requesterEmail === user?.email;
   const canEdit = reservationCanBeEditedByUser(reservation, user);
+
+  if (!canView) {
+    return (
+      <div className="px-8 py-6">
+        <Card className="rounded-[28px]">
+          <p className="text-lg font-semibold text-slate-950">Booking details are restricted</p>
+          <p className="mt-2 text-sm text-slate-600">
+            Staff users can only open their own booking history. Please use the planner for the general schedule view.
+          </p>
+          <div className="mt-6">
+            <Link href="/planner">
+              <Button variant="ghost">Back to planner</Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   async function handleCancel() {
     const confirmed = window.confirm("Cancel this booking? The reservation will remain in history.");

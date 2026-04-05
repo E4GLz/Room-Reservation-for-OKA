@@ -1,4 +1,4 @@
-import { BookingForm } from "@/components/bookings/booking-form";
+import { CreateBookingPage } from "@/components/bookings/create-booking-page";
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/prisma";
 
@@ -17,11 +17,9 @@ export default async function CreateBooking() {
       <PageHeader
         eyebrow="Reservations"
         title="Create Booking"
-        description="Enter meeting details and reserve a room with server-side conflict validation."
+        description="Admin users can register new bookings with server-side conflict validation and room checks."
       />
-      <div className="px-8 py-6">
-        <BookingForm rooms={rooms} />
-      </div>
+      <CreateBookingPage rooms={rooms} />
     </>
   );
 }

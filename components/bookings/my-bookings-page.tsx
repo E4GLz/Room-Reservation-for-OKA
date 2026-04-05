@@ -1,0 +1,131 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ArrowUpRight, CalendarClock, CheckCheck, CircleOff, TimerReset } from "lucide-react";
+import { BookingStatus } from "@prisma/client";
+import { Card } from "@/components/ui/card";
+import { KpiCard } from "@/components/ui/kpi-card";
+import { StatePanel } from "@/components/ui/state-panel";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useSession } from "@/components/providers/session-provider";
+import { formatLongDate } from "@/lib/utils";
+import type { ReservationRecord } from "@/lib/types";
+
+export function MyBookingsPage() {
+  const { user, isReady } = useSession();
+  const [reservations, setReservations] = useState<ReservationRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!isReady) {
+      return;
+    }
+
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    async function loadReservations() {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch(`/api/reservations?requesterEmail=${encodeURIComponent(user.email)}`);
+      const payload = await response.json();
+
+      if (!response.ok) {
+        setError(payload.error || "Unable to load booking history.");
+        setLoading(false);
+        return;
+      }
+
+      setReservations(payload as ReservationRecord[]);
+      setLoading(false);
+    }
+
+    void loadReservations();
+  }, [isReady, user]);
+
+  const sortedReservations = useMemo(
+    () =>
+      [...reservations].sort(
+        (a, b) =>
+          new Date(b.reservationDate).getTime() - new Date(a.reservationDate).getTime() ||
+          b.startTime.localeCompare(a.startTime)
+      ),
+    [reservations]
+  );
+  const confirmedCount = sortedReservations.filter((reservation) => reservation.bookingStatus === BookingStatus.CONFIRMED).length;
+  const pendingCount = sortedReservations.filter((reservation) => reservation.bookingStatus === BookingStatus.PENDING).length;
+  const cancelledCount = sortedReservations.filter((reservation) => reservation.bookingStatus === BookingStatus.CANCELLED).length;
+  const upcomingCount = sortedReservations.filter(
+    (reservation) => reservation.bookingStatus !== BookingStatus.CANCELLED && new Date(reservation.reservationEndDate) >= new Date()
+  ).length;
+
+  if (isReady && !user) {
+    return <StatePanel title="Sign in required" message="Please sign in to review your booking history." />;
+  }
+
+  return (
+    <div className="space-y-6 px-8 py-6">
+      <div className="grid gap-4 xl:grid-cols-4">
+        <KpiCard label="Your total bookings" value={sortedReservations.length} icon={<CalendarClock className="h-5 w-5" />} tone="accent" />
+        <KpiCard label="Confirmed" value={confirmedCount} icon={<CheckCheck className="h-5 w-5" />} tone="soft" />
+        <KpiCard label="Pending" value={pendingCount} icon={<TimerReset className="h-5 w-5" />} tone="warning" />
+        <KpiCard label="Cancelled" value={cancelledCount} icon={<CircleOff className="h-5 w-5" />} />
+      </div>
+
+      <Card>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-lg font-semibold text-slate-950">My booking history</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              {upcomingCount} active booking{upcomingCount === 1 ? "" : "s"} are still upcoming.
+            </p>
+          </div>
+          <Link href="/planner">
+            <Button variant="secondary">Open schedule</Button>
+          </Link>
+        </div>
+
+        <div className="mt-4 space-y-3">
+          {loading ? (
+            <StatePanel title="Loading history" message="Your booking history is being prepared." />
+          ) : error ? (
+            <StatePanel title="Unable to load history" message={error} />
+          ) : sortedReservations.length === 0 ? (
+            <StatePanel title="No bookings yet" message="Your booking history will appear here once an admin creates reservations under your account." />
+          ) : (
+            sortedReservations.map((reservation) => (
+              <div key={reservation.id} className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">{reservation.guestCompany}</p>
+                    <p className="mt-1 text-sm text-slate-600">{reservation.chargedDepartment}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge label={reservation.bookingStatus} />
+                    <Link href={`/bookings/${reservation.id}`} className="text-slate-400 transition hover:text-slate-700">
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.14em] text-slate-500">
+                  <span>{reservation.room.name}</span>
+                  <span>{formatLongDate(reservation.reservationDate)}</span>
+                  <span>
+                    {reservation.startTime} - {reservation.endTime}
+                  </span>
+                  <span>{reservation.reservationType}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+}

@@ -9,7 +9,7 @@ Internal room reservation system for meetings, workshops, training sessions, and
 - Database: SQLite
 - ORM: Prisma
 - Charts: Recharts
-- Auth: Local email/password sign-in with admin and standard user roles
+- Auth: Local email/password sign-in with admin and staff user roles
 
 ## Features
 
@@ -32,6 +32,7 @@ Internal room reservation system for meetings, workshops, training sessions, and
 - `/login`
 - `/dashboard`
 - `/planner`
+- `/my-bookings`
 - `/bookings/new`
 - `/bookings/[id]`
 - `/rooms`
@@ -140,12 +141,12 @@ npm run dev
 
 8. Open [http://localhost:3000](http://localhost:3000)
 
-## Default Admin Account
+## Admin Onboarding
 
-- email: `admin@company.internal`
-- password: `Admin@123`
-
-Use this account for initial access, then create company users from `/users`.
+- the seed process creates an initial admin account for first-time setup
+- after first sign-in, update the admin profile password immediately from `/profile`
+- use `/users` to create staff accounts and keep admin access limited
+- before any broader rollout, replace development-style seeded admin credentials with company-controlled credentials
 
 ## Database Reset Behavior
 
@@ -156,10 +157,22 @@ Use this account for initial access, then create company users from `/users`.
 
 ## Notes For Expansion
 
-- Replace local login with SSO or NextAuth/Auth.js
+- Replace local login with server-side auth/session enforcement before production launch
 - Move from SQLite to PostgreSQL for shared internal deployment
 - Add true email notifications and approval workflows
 - Add export to Excel/PDF if operational teams still need reports
+
+## Role Model For Rollout
+
+- `Admin`: full access to rooms, users, settings, booking creation, editing, cancellation, reports, and reminder sending
+- `Staff` (stored internally as `STANDARD` for compatibility): planner access, personal dashboard summary, and personal booking history only
+- staff users do not see rooms, reports, users, settings, or booking creation actions in the UI
+
+## Go-Live Warning
+
+- the current app still uses client-side session storage for sign-in state
+- that is acceptable for demonstrations and internal review, but it is not sufficient to protect production data by itself
+- before a true live rollout, add server-side authentication and authorization checks to API routes and pages
 
 ## Important Business Rules Implemented
 

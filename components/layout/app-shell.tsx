@@ -1,11 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
   Building2,
-  CalendarDays,
+  CalendarClock,
   CalendarRange,
   CircleUserRound,
   ClipboardList,
@@ -13,7 +14,8 @@ import {
   LogIn,
   Settings,
   UserCog,
-  PanelsTopLeft
+  PanelsTopLeft,
+  History
 } from "lucide-react";
 import { cn, toTitleCase } from "@/lib/utils";
 import { useSession } from "@/components/providers/session-provider";
@@ -22,8 +24,9 @@ const navigation = [
   { href: "/login", label: "Login", icon: LogIn },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/planner", label: "Planner", icon: CalendarRange },
-  { href: "/rooms", label: "Rooms", icon: Building2 },
-  { href: "/reports", label: "Reports", icon: ClipboardList },
+  { href: "/my-bookings", label: "My Bookings", icon: History, staffOnly: true },
+  { href: "/rooms", label: "Rooms", icon: Building2, adminOnly: true },
+  { href: "/reports", label: "Reports", icon: ClipboardList, adminOnly: true },
   { href: "/users", label: "Users", icon: UserCog, adminOnly: true },
   { href: "/settings", label: "Settings", icon: Settings, adminOnly: true }
 ] as const;
@@ -39,14 +42,37 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const { user } = useSession();
+  const [now, setNow] = useState(() => new Date());
   const displayName = user?.name ? toTitleCase(user.name) : "Guest";
   const firstName = displayName.split(" ")[0] ?? "Guest";
-  const visibleNavigation = navigation.filter((item) => !item.adminOnly || user?.role === "ADMIN");
+  const isPublicRoute = pathname === "/" || pathname === "/login";
+  const visibleNavigation = navigation.filter((item) => {
+    if (item.adminOnly) {
+      return user?.role === "ADMIN";
+    }
+
+    if (item.staffOnly) {
+      return user?.role === "STANDARD";
+    }
+
+    return true;
+  });
   const todayLabel = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
-    year: "numeric"
-  }).format(new Date());
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(now);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(new Date()), 30000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  if (isPublicRoute) {
+    return <main className="min-h-screen bg-[linear-gradient(180deg,rgba(247,249,254,0.95),rgba(239,244,252,0.85))]">{children}</main>;
+  }
 
   return (
     <div className="min-h-screen bg-[var(--surface)]">
@@ -67,7 +93,7 @@ export function AppShell({
             <p className="mt-2 text-base font-medium text-white">{displayName}</p>
             <p className="text-sm text-white/70">{user?.email ?? "No active session"}</p>
             <span className="mt-3 inline-flex rounded-full bg-white/12 px-3 py-1 text-xs font-medium text-white ring-1 ring-white/14">
-              {user?.role ?? "No role"}
+              {user?.email ? "Active session" : "No role"}
             </span>
           </div>
 
@@ -111,13 +137,18 @@ export function AppShell({
 
             <div className="flex flex-wrap items-center gap-3">
               <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-sm font-medium text-[var(--accent)] ring-1 ring-[#d8e4ff]">
-                <CalendarDays className="h-4 w-4" />
+                <CalendarClock className="h-4 w-4" />
                 {todayLabel}
               </span>
               <span className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-slate-700 ring-1 ring-[var(--line)]">
-                <Bell className="h-4 w-4 text-[var(--accent)]" />
-                {user?.role ?? "Guest"}
+                {displayName}
               </span>
+              <Link
+                href={user?.role === "ADMIN" ? "/dashboard" : "/my-bookings"}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 ring-1 ring-[var(--line)] transition hover:bg-slate-50"
+              >
+                <Bell className="h-4 w-4 text-[var(--accent)]" />
+              </Link>
               <Link href="/profile" className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent)] ring-1 ring-[#d8e4ff] transition hover:bg-[#dbe6ff]">
                 <CircleUserRound className="h-5 w-5" />
               </Link>

@@ -368,7 +368,7 @@ export function BookingForm({
         <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
           {adminManaged
             ? "Admin bookings are saved directly as confirmed reservations."
-            : "Standard user bookings are submitted as pending requests."}
+            : "Staff bookings are submitted as pending requests."}
         </div>
 
         {error ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}

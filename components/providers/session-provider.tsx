@@ -6,7 +6,7 @@ import type { AppUser } from "@/lib/types";
 
 type SessionContextValue = {
   user: AppUser | null;
-  setSessionUser: (user: AppUser | null) => void;
+  setSessionUser: (user: AppUser | null, options?: { remember?: boolean }) => void;
   updateSessionUser: (user: Partial<AppUser>) => void;
   logout: () => void;
   isReady: boolean;
@@ -20,12 +20,13 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
+    const saved = window.localStorage.getItem(STORAGE_KEY) ?? window.sessionStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         setUser(JSON.parse(saved) as AppUser);
       } catch {
         window.localStorage.removeItem(STORAGE_KEY);
+        window.sessionStorage.removeItem(STORAGE_KEY);
         setUser(null);
       }
     }
@@ -35,12 +36,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<SessionContextValue>(
     () => ({
       user,
-      setSessionUser: (nextUser) => {
+      setSessionUser: (nextUser, options) => {
         setUser(nextUser);
         if (nextUser) {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextUser));
+          const serialized = JSON.stringify(nextUser);
+          if (options?.remember === false) {
+            window.localStorage.removeItem(STORAGE_KEY);
+            window.sessionStorage.setItem(STORAGE_KEY, serialized);
+          } else {
+            window.sessionStorage.removeItem(STORAGE_KEY);
+            window.localStorage.setItem(STORAGE_KEY, serialized);
+          }
         } else {
           window.localStorage.removeItem(STORAGE_KEY);
+          window.sessionStorage.removeItem(STORAGE_KEY);
         }
       },
       updateSessionUser: (nextUser) => {
@@ -50,13 +59,20 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
           }
 
           const merged = { ...current, ...nextUser };
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+          const serialized = JSON.stringify(merged);
+          if (window.localStorage.getItem(STORAGE_KEY)) {
+            window.localStorage.setItem(STORAGE_KEY, serialized);
+          }
+          if (window.sessionStorage.getItem(STORAGE_KEY)) {
+            window.sessionStorage.setItem(STORAGE_KEY, serialized);
+          }
           return merged;
         });
       },
       logout: () => {
         setUser(null);
         window.localStorage.removeItem(STORAGE_KEY);
+        window.sessionStorage.removeItem(STORAGE_KEY);
       },
       isReady
     }),

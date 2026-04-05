@@ -5,9 +5,11 @@ import { ChartCard } from "@/components/ui/chart-card";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { Card } from "@/components/ui/card";
 import { StatePanel } from "@/components/ui/state-panel";
+import { useSession } from "@/components/providers/session-provider";
 import type { ReportsPayload } from "@/lib/types";
 
 export function ReportsPage({ data }: { data: ReportsPayload }) {
+  const { user } = useSession();
   const pieColors = ["#16a34a", "#f59e0b", "#eab308", "#ef4444"];
   const trendBarColor = "#16a34a";
   const roomTypeBarColor = "#f97316";
@@ -15,6 +17,17 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
   const hasReservationTypeData = data.reservationTypeMix.some((item) => item.total > 0);
   const hasRoomTypeData = data.roomTypeMix.some((item) => item.total > 0);
   const hasTopCompanies = data.topCompanies.length > 0;
+
+  if (user?.role !== "ADMIN") {
+    return (
+      <div className="px-8 py-6">
+        <StatePanel
+          title="Admin access required"
+          message="Detailed reports remain on the admin side. Staff users can use the dashboard and My Bookings for their own statistics."
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 px-8 py-6">
