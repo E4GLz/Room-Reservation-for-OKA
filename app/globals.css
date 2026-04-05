@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color-scheme: light;
+  --surface: #eef3fb;
+  --surface-strong: #dfe8fb;
+  --ink: #141b35;
+  --muted: #66758a;
+  --line: rgba(119, 139, 175, 0.22);
+  --accent: #2557e5;
+  --accent-soft: #e8efff;
+}
+
+body {
+  @apply text-slate-900 antialiased;
+  background-image:
+    radial-gradient(circle at top left, rgba(37, 87, 229, 0.18), transparent 24%),
+    radial-gradient(circle at top right, rgba(122, 164, 255, 0.14), transparent 26%),
+    linear-gradient(180deg, #f7f9fe, #edf2fb 52%, #e9eef8);
+  min-height: 100vh;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.92), transparent 36%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.52), transparent 40%);
+  opacity: 0.95;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-slate-300;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}

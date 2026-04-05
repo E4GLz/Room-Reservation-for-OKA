@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  STANDARD
+}
+
+enum RoomStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String
+  phoneNumber  String?
+  role         UserRole   @default(STANDARD)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+model AppSettings {
+  id             String      @id @default("default")
+  siteTitle      String      @default("Room Reservation Hub")
+  siteDescription String     @default("Internal platform for room bookings, approvals, and planning.")
+  workWeekStart  Int         @default(0)
+  workWeekEnd    Int         @default(4)
+  upcomingReminderHours Int  @default(24)
+  blockedDays    BlockedDay[]
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+}
+
+model BlockedDay {
+  id         String      @id @default(cuid())
+  settingsId String
+  date       DateTime
+  label      String
+  notes      String?
+  settings   AppSettings @relation(fields: [settingsId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
+
+  @@unique([settingsId, date])
+}
+
+model Room {
+  id           String        @id @default(cuid())
+  code         String        @unique
+  name         String
+  type         String
+  capacity     Int
+  location     String
+  notes        String?
+  status       RoomStatus    @default(ACTIVE)
+  reservations Reservation[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Reservation {
+  id                String            @id @default(cuid())
+  reservationCode   String            @unique
+  roomId            String
+  reservationDate   DateTime
+  reservationEndDate DateTime
+  startTime         String
+  endTime           String
+  reservationType   String
+  guestCompany      String
+  guestName         String?
+  guestCompanyLogo  String?
+  chargedCompany    String
+  chargedDepartment String
+  materialsToDisplay String?
+  foodServiceRequired Boolean         @default(false)
+  bookingCompany    String
+  meetingName       String
+  eventType         String
+  requesterName     String
+  requesterEmail    String
+  contactNumber     String?
+  attendeesCount    Int
+  remarks           String?
+  bookingStatus     BookingStatus     @default(PENDING)
+  createdByRole     UserRole          @default(STANDARD)
+  overrideCapacity  Boolean           @default(false)
+  cancelledAt       DateTime?
+  cancellationNotes String?
+  room              Room              @relation(fields: [roomId], references: [id])
+  auditEntries      ReservationAudit[]
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([roomId, reservationDate])
+}
+
+model ReservationAudit {
+  id             String      @id @default(cuid())
+  reservationId  String
+  action         String
+  actorName      String
+  actorEmail     String
+  actorRole      UserRole
+  notes          String?
+  snapshot       String?
+  reservation    Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime    @default(now())
+
+  @@index([reservationId, createdAt])
+}
