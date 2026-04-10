@@ -61,8 +61,22 @@ export const userSchema = z.object({
   email: z.string().email(),
   phoneNumber: z.string().max(40).optional().or(z.literal("")),
   password: z.string().min(6).max(120).optional().or(z.literal("")),
+  managerId: z.string().optional().or(z.literal("")),
   role: z.nativeEnum(UserRole),
   status: z.nativeEnum(UserStatus)
+}).refine((value) => {
+  if (value.role === UserRole.ADMIN) {
+    return true;
+  }
+
+  if (value.status === UserStatus.INACTIVE) {
+    return true;
+  }
+
+  return Boolean(value.managerId);
+}, {
+  path: ["managerId"],
+  message: "Active staff users must be assigned to a manager."
 });
 
 export const profileSchema = z
@@ -92,6 +106,7 @@ export const blockedDaySchema = z.object({
 export const settingsSchema = z
   .object({
     siteTitle: z.string().min(2).max(120),
+    siteTitleArabic: z.string().max(120).optional().or(z.literal("")),
     siteDescription: z.string().min(10).max(300),
     workWeekStart: z.coerce.number().int().min(0).max(6),
     workWeekEnd: z.coerce.number().int().min(0).max(6),

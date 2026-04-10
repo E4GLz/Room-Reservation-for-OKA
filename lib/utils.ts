@@ -132,6 +132,39 @@ export function getStatusTone(status: string) {
   }
 }
 
+export function getManagerApprovalLabel(reservation: Pick<ReservationRecord, "createdByRole" | "bookingStatus" | "managerApprovalStatus">) {
+  if (reservation.createdByRole === "ADMIN" || reservation.managerApprovalStatus === "NOT_REQUIRED") {
+    return "No manager approval";
+  }
+
+  if (reservation.managerApprovalStatus === "PENDING") {
+    return "Waiting for manager";
+  }
+
+  if (reservation.managerApprovalStatus === "APPROVED") {
+    return reservation.bookingStatus === "PENDING" ? "Waiting for admin" : "Manager approved";
+  }
+
+  if (reservation.managerApprovalStatus === "REJECTED") {
+    return "Rejected by manager";
+  }
+
+  return "Manager review";
+}
+
+export function getManagerApprovalTone(status: string) {
+  switch (status) {
+    case "PENDING":
+      return "bg-orange-100 text-orange-800 ring-orange-200";
+    case "APPROVED":
+      return "bg-blue-100 text-blue-800 ring-blue-200";
+    case "REJECTED":
+      return "bg-rose-100 text-rose-800 ring-rose-200";
+    default:
+      return "bg-slate-100 text-slate-700 ring-slate-200";
+  }
+}
+
 export function timeToMinutes(value: string) {
   const [hours, minutes] = value.split(":").map(Number);
   return hours * 60 + minutes;
@@ -258,9 +291,23 @@ export function getWorkWeekDays(start: number, end: number) {
 }
 
 export function serializeUser(user: UserRecord) {
+  const { passwordHash, manager, directReports, managedReservations, ...rest } = user as UserRecord & {
+    manager?: { name?: string; email?: string } | null;
+    directReports?: unknown;
+    managedReservations?: unknown;
+  };
+
   return {
-    ...user,
+    ...rest,
     name: toTitleCase(user.name),
+    managerName:
+      manager && typeof manager === "object" && "name" in manager
+        ? toTitleCase(String(manager.name))
+        : ("managerName" in user ? user.managerName : null),
+    managerEmail:
+      manager && typeof manager === "object" && "email" in manager
+        ? String(manager.email)
+        : ("managerEmail" in user ? user.managerEmail : null),
     createdAt: user.createdAt instanceof Date ? user.createdAt.toISOString() : user.createdAt,
     updatedAt: user.updatedAt instanceof Date ? user.updatedAt.toISOString() : user.updatedAt
   };

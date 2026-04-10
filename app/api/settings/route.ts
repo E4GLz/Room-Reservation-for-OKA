@@ -31,6 +31,7 @@ export async function PUT(request: Request) {
       where: { id: "default" },
       data: {
         siteTitle: parsed.data.siteTitle,
+        siteTitleArabic: parsed.data.siteTitleArabic || null,
         siteDescription: parsed.data.siteDescription,
         workWeekStart: parsed.data.workWeekStart,
         workWeekEnd: parsed.data.workWeekEnd,
@@ -51,7 +52,7 @@ export async function PUT(request: Request) {
       }
     });
   } catch (error) {
-    if (!(error instanceof Error) || !error.message.includes("upcomingReminderHours")) {
+    if (!(error instanceof Error) || (!error.message.includes("upcomingReminderHours") && !error.message.includes("siteTitleArabic"))) {
       throw error;
     }
 

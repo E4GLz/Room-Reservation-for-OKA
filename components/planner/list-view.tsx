@@ -1,3 +1,5 @@
+"use client";
+
 import { ReservationCard } from "@/components/planner/reservation-card";
 import { StatePanel } from "@/components/ui/state-panel";
 import { formatLongDate } from "@/lib/utils";

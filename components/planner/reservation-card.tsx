@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { Clock3, UtensilsCrossed } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
-import { cn } from "@/lib/utils";
+import { cn, getManagerApprovalLabel, getManagerApprovalTone } from "@/lib/utils";
 import type { ReservationRecord } from "@/lib/types";
 
 export function ReservationCard({
@@ -15,7 +16,9 @@ export function ReservationCard({
   compact?: boolean;
 }) {
   const { user } = useSession();
-  const canOpenDetail = user?.role === "ADMIN" || reservation.requesterEmail === user?.email;
+  const { t } = useLanguage();
+  const canOpenDetail =
+    user?.role === "ADMIN" || reservation.requesterEmail === user?.email || reservation.managerId === user?.id;
   const cardClassName = cn(
     "block rounded-[20px] border border-[var(--line)] bg-[rgba(255,255,255,0.94)] px-3 py-2.5 shadow-sm transition",
     canOpenDetail && "hover:border-[rgba(37,87,229,0.3)] hover:-translate-y-[1px] hover:shadow-md",
@@ -33,12 +36,17 @@ export function ReservationCard({
       </div>
       <p className="mt-2 truncate text-sm font-semibold text-slate-900">{reservation.guestCompany}</p>
       <p className="truncate text-xs text-slate-600">
-        {reservation.chargedDepartment} | {reservation.reservationType}
+        {reservation.chargedDepartment} | {t(reservation.reservationType)}
       </p>
+      {reservation.createdByRole === "STANDARD" && reservation.bookingStatus !== "CONFIRMED" ? (
+        <div className="mt-2">
+          <Badge label={getManagerApprovalLabel(reservation)} tone={getManagerApprovalTone(reservation.managerApprovalStatus)} />
+        </div>
+      ) : null}
       {reservation.foodServiceRequired ? (
         <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">
           <UtensilsCrossed className="h-3 w-3" />
-          Food service
+          {t("Food service")}
         </p>
       ) : null}
     </>

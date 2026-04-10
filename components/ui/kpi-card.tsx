@@ -1,4 +1,7 @@
+"use client";
+
 import type { ReactNode } from "react";
+import { useLanguage } from "@/components/providers/language-provider";
 import { Card } from "@/components/ui/card";
 
 export function KpiCard({
@@ -14,6 +17,8 @@ export function KpiCard({
   icon?: ReactNode;
   tone?: "default" | "accent" | "warning" | "soft";
 }) {
+  const { t } = useLanguage();
+
   return (
     <Card
       className={
@@ -28,11 +33,11 @@ export function KpiCard({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className={tone === "accent" ? "text-sm text-white/72" : "text-sm text-slate-500"}>{label}</p>
+          <p className={tone === "accent" ? "text-sm text-white/72" : "text-sm text-slate-500"}>{t(label)}</p>
           <p className={tone === "accent" ? "mt-3 text-3xl font-semibold tracking-tight text-white" : "mt-3 text-3xl font-semibold tracking-tight text-slate-950"}>
             {value}
           </p>
-          {meta ? <p className={tone === "accent" ? "mt-2 text-sm text-white/72" : "mt-2 text-sm text-slate-500"}>{meta}</p> : null}
+          {meta ? <p className={tone === "accent" ? "mt-2 text-sm text-white/72" : "mt-2 text-sm text-slate-500"}>{t(meta)}</p> : null}
         </div>
         {icon ? (
           <div

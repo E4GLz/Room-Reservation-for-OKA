@@ -1,19 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { StatePanel } from "@/components/ui/state-panel";
 import { Textarea } from "@/components/ui/textarea";
+import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
+import { extractFlattenedFormError, readErrorMessage } from "@/lib/client-errors";
 import { WEEKDAY_OPTIONS } from "@/lib/constants";
 import type { AppSettingsRecord, SettingsFormValues } from "@/lib/types";
 
 function mapInitialValues(settings: AppSettingsRecord): SettingsFormValues {
   return {
     siteTitle: settings.siteTitle,
+    siteTitleArabic: "siteTitleArabic" in settings ? settings.siteTitleArabic ?? "" : "",
     siteDescription: settings.siteDescription,
     workWeekStart: settings.workWeekStart,
     workWeekEnd: settings.workWeekEnd,
@@ -28,6 +31,7 @@ function mapInitialValues(settings: AppSettingsRecord): SettingsFormValues {
 }
 
 export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
+  const { t } = useLanguage();
   const { user } = useSession();
   const [form, setForm] = useState<SettingsFormValues>(() => mapInitialValues(settings));
   const [saving, setSaving] = useState(false);
@@ -42,28 +46,38 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
   ];
 
   if (user?.role !== "ADMIN") {
-    return <StatePanel title="Admin access required" message="Only admin users can update booking settings." />;
+    return <StatePanel title={t("Admin access required")} message={t("Only admin users can update booking settings.")} />;
   }
+
+  useEffect(() => {
+    setForm(mapInitialValues(settings));
+    setError("");
+    setSaving(false);
+  }, [settings]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
 
-    const response = await fetch("/api/settings", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form)
-    });
+    try {
+      const response = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
 
-    const payload = await response.json();
-    if (!response.ok) {
-      setError(payload.error?.formErrors?.[0] || "Unable to save settings.");
+      if (!response.ok) {
+        setError(await readErrorMessage(response, t("Unable to save settings."), extractFlattenedFormError));
+        setSaving(false);
+        return;
+      }
+
+      window.location.reload();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : t("Unable to save settings."));
       setSaving(false);
-      return;
     }
-
-    window.location.reload();
   }
 
   return (
@@ -72,53 +86,57 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
         <form className="space-y-6" onSubmit={handleSubmit}>
           <div className="grid gap-4 lg:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Website title</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Website title")}</label>
               <Input value={form.siteTitle} onChange={(event) => setForm({ ...form, siteTitle: event.target.value })} />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Workweek start day</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Website title in Arabic")}</label>
+              <Input value={form.siteTitleArabic ?? ""} onChange={(event) => setForm({ ...form, siteTitleArabic: event.target.value })} />
+            </div>
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Workweek start day")}</label>
               <Select
                 value={String(form.workWeekStart)}
                 onChange={(event) => setForm({ ...form, workWeekStart: Number(event.target.value) })}
               >
                 {WEEKDAY_OPTIONS.map((day) => (
                   <option key={day.value} value={day.value}>
-                    {day.label}
+                    {t(day.label)}
                   </option>
                 ))}
               </Select>
             </div>
             <div className="lg:col-span-2">
-              <label className="mb-2 block text-sm font-medium text-slate-700">Website description</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Website description")}</label>
               <Textarea value={form.siteDescription} onChange={(event) => setForm({ ...form, siteDescription: event.target.value })} />
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Workweek end day</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Workweek end day")}</label>
               <Select
                 value={String(form.workWeekEnd)}
                 onChange={(event) => setForm({ ...form, workWeekEnd: Number(event.target.value) })}
               >
                 {WEEKDAY_OPTIONS.map((day) => (
                   <option key={day.value} value={day.value}>
-                    {day.label}
+                    {t(day.label)}
                   </option>
                 ))}
               </Select>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Upcoming meeting reminder</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Upcoming meeting reminder")}</label>
               <Select
                 value={String(form.upcomingReminderHours)}
                 onChange={(event) => setForm({ ...form, upcomingReminderHours: Number(event.target.value) })}
               >
                 {reminderOptions.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {t(option.label)}
                   </option>
                 ))}
               </Select>
               <p className="mt-2 text-xs text-slate-500">
-                Reminder emails are prepared for active admin accounts using this lead time.
+                {t("Reminder emails are prepared for active admin accounts using this lead time.")}
               </p>
             </div>
           </div>
@@ -126,8 +144,8 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
           <div className="space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-lg font-semibold text-slate-950">Blocked booking days</h3>
-                <p className="mt-1 text-sm text-slate-500">Use this list for national day, Eid, shutdown periods, or any days that should not accept bookings.</p>
+                <h3 className="text-lg font-semibold text-slate-950">{t("Blocked booking days")}</h3>
+                <p className="mt-1 text-sm text-slate-500">{t("Use this list for national day, Eid, shutdown periods, or any days that should not accept bookings.")}</p>
               </div>
               <Button
                 type="button"
@@ -139,12 +157,12 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
                   }))
                 }
               >
-                Add blocked day
+                {t("Add blocked day")}
               </Button>
             </div>
 
             {form.blockedDays.length === 0 ? (
-              <StatePanel title="No blocked days" message="Bookings will be allowed on all dates until you add a blocked day." />
+              <StatePanel title={t("No blocked days")} message={t("Bookings will be allowed on all dates until you add a blocked day.")} />
             ) : (
               form.blockedDays.map((blockedDay, index) => (
                 <Card key={`${blockedDay.id ?? "new"}-${index}`} className="rounded-[22px] bg-slate-50">
@@ -162,7 +180,7 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
                       }
                     />
                     <Input
-                      placeholder="Day label"
+                      placeholder={t("Day label")}
                       value={blockedDay.label}
                       onChange={(event) =>
                         setForm((current) => ({
@@ -174,7 +192,7 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
                       }
                     />
                     <Input
-                      placeholder="Optional note"
+                      placeholder={t("Optional note")}
                       value={blockedDay.notes}
                       onChange={(event) =>
                         setForm((current) => ({
@@ -195,7 +213,7 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
                         }))
                       }
                     >
-                      Remove
+                      {t("Remove")}
                     </Button>
                   </div>
                 </Card>
@@ -207,7 +225,7 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
 
           <div className="flex justify-end">
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save settings"}
+              {saving ? t("Saving...") : t("Save settings")}
             </Button>
           </div>
         </form>

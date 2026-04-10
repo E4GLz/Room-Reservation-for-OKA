@@ -1,5 +1,7 @@
-import { format } from "date-fns";
+"use client";
+
 import { ReservationCard } from "@/components/planner/reservation-card";
+import { useLanguage } from "@/components/providers/language-provider";
 import { cn, groupReservationsByDateAndRoom, isBlockedDay, isCurrentDay, isWeekend, toDateKey } from "@/lib/utils";
 import type { AppSettingsRecord, ReservationRecord, RoomRecord } from "@/lib/types";
 
@@ -14,6 +16,7 @@ export function PlannerGrid({
   reservations: ReservationRecord[];
   settings: AppSettingsRecord;
 }) {
+  const { t, language } = useLanguage();
   const grouped = groupReservationsByDateAndRoom(
     reservations,
     dates,
@@ -26,7 +29,7 @@ export function PlannerGrid({
         <thead className="sticky top-0 z-10 bg-[#233241] text-white">
           <tr>
             <th className="w-44 border-b border-slate-800 px-4 py-4 text-xs uppercase tracking-[0.18em] text-slate-300">
-              Date
+              {t("Date")}
             </th>
             {rooms.map((room) => (
               <th key={room.id} className="min-w-64 border-b border-slate-800 px-4 py-4">
@@ -56,14 +59,18 @@ export function PlannerGrid({
                 >
                   <div className="flex items-center gap-2">
                     <div>
-                      <div className="text-sm font-semibold text-slate-900">{format(date, "EEE")}</div>
-                      <div className="text-2xl font-semibold tracking-tight text-slate-950">{format(date, "dd")}</div>
+                      <div className="text-sm font-semibold text-slate-900">
+                        {new Intl.DateTimeFormat(language === "ar" ? "ar-SA" : "en-US", { weekday: "short" }).format(date)}
+                      </div>
+                      <div className="text-2xl font-semibold tracking-tight text-slate-950">
+                        {new Intl.DateTimeFormat(language === "ar" ? "ar-SA" : "en-US", { day: "2-digit" }).format(date)}
+                      </div>
                     </div>
                       <div className="text-xs uppercase tracking-[0.14em] text-slate-500">
-                        {format(date, "MMM yyyy")}
-                        {today ? <div className="mt-1 text-brand-700">Today</div> : null}
-                      {holiday ? <div className="mt-1 text-amber-700">{blockedDay?.label || "Blocked"}</div> : null}
-                      {weekend ? <div className="mt-1 text-slate-500">Weekend</div> : null}
+                        {new Intl.DateTimeFormat(language === "ar" ? "ar-SA" : "en-US", { month: "short", year: "numeric" }).format(date)}
+                        {today ? <div className="mt-1 text-brand-700">{t("Today")}</div> : null}
+                      {holiday ? <div className="mt-1 text-amber-700">{blockedDay?.label || t("Blocked")}</div> : null}
+                      {weekend ? <div className="mt-1 text-slate-500">{t("Weekend")}</div> : null}
                     </div>
                   </div>
                 </td>
@@ -80,7 +87,7 @@ export function PlannerGrid({
                       <div className="flex min-h-24 flex-col gap-2">
                         {items.length === 0 ? (
                           <div className="rounded-2xl border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-400">
-                            No bookings
+                            {t("No bookings")}
                           </div>
                         ) : (
                           items.map((reservation) => <ReservationCard key={reservation.id} reservation={reservation} compact />)
