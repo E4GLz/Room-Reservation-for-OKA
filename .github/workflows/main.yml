@@ -90,5 +90,5 @@ jobs:
           script: |
             cd deployment/
             docker compose -f docker-compose.yaml down
-            sed -i '/^  app:/{n;s|image: .*$|image: ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:app-v:${{ steps.version.outputs.VERSION }}|}' docker-compose.yaml
+            sed -i '/^  app:/{n;s|image: .*$|image: ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:app-v${{ steps.version.outputs.VERSION }}|}' docker-compose.yaml
             docker compose -f docker-compose.yaml up -d
