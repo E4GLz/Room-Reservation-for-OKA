@@ -1,0 +1,78 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - deployment
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest # OS that handles pipeline steps
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Required to fetch all tags
+
+      - name: Bump version from last tag
+        id: version
+        run: |
+          LAST_TAG=$(git tag --sort=-v:refname | head -n 1)
+          
+          if [ -z "$LAST_TAG" ]; then
+            NEW_VERSION="1.100"  # First time default
+          else
+            MAJOR=$(echo $LAST_TAG | tr -d 'v' | cut -d. -f1)
+            MINOR=$(echo $LAST_TAG | tr -d 'v' | cut -d. -f2)
+            NEW_MINOR=$((MINOR + 1))
+            NEW_VERSION="$MAJOR.$NEW_MINOR"
+          fi
+          
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        run: docker login -u ${{ secrets.DOCKER_HUB_USERNAME }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          DATABASE_URL="${{ secrets.DATABASE_URL }}"
+          SMTP_HOST="${{ secrets.SMTP_HOST }}"
+          SMTP_PORT="${{ secrets.SMTP_PORT }}"
+          SMTP_SECURE="${{ secrets.SMTP_SECURE }}"
+          SMTP_USER="${{ secrets.SMTP_USER }}"
+          SMTP_PASS="${{ secrets.SMTP_PASS }}"
+          SMTP_FROM="${{ secrets.SMTP_FROM }}"
+          ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}"
+          ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}"
+          EOF
+
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:backend-v${{ steps.version.outputs.VERSION }} --no-cache .
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:backend-v${{ steps.version.outputs.VERSION }}
+
+      - name: Copy .env to VM
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          source: ".env"
+          target: "deployment/"
+
+      - name: Deploy Application
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          script: |
+            cd deployment/
+            docker compose -f docker-compose.yaml down
+            sed -i '/^  app:/{n;s|image: .*$|image: ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:backend-v${{ steps.version.outputs.VERSION }}|}' docker-compose.yaml
+            docker compose -f docker-compose.yaml up -d
