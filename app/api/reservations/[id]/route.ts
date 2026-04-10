@@ -11,6 +11,7 @@ import {
 } from "@/lib/reservations";
 import { reservationSchema } from "@/lib/validation";
 import { ReservationInput } from "@/lib/types";
+export const dynamic = 'force-dynamic';
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

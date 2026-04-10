@@ -2,8 +2,8 @@ import { notFound } from "next/navigation";
 import { BookingDetailPage } from "@/components/bookings/booking-detail-page";
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/prisma";
-import { serializeReservation } from "@/lib/reservations";
 import { ReservationRecord } from "@/lib/types";
+export const dynamic = 'force-dynamic';
 
 async function getReservation(id: string) {
   const reservationRaw = await prisma.reservation.findUnique({

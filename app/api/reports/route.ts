@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { BookingStatus } from "@prisma/client";
 import { format, subMonths } from "date-fns";
 import { prisma } from "@/lib/prisma";
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const [rooms, reservations] = await Promise.all([

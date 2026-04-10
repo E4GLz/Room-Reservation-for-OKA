@@ -3,6 +3,7 @@ import { ensureDefaultAdmin, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeUser } from "@/lib/utils";
 import { loginSchema } from "@/lib/validation";
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   await ensureDefaultAdmin();

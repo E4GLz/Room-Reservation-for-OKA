@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { BookingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { buildNotification, createAuditEntry, serializeReservation } from "@/lib/reservations";
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

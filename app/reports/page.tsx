@@ -3,6 +3,7 @@ import { ReportsPage } from "@/components/reports/reports-page";
 import { BookingStatus } from "@prisma/client";
 import { format, subMonths } from "date-fns";
 import { prisma } from "@/lib/prisma";
+export const dynamic = 'force-dynamic';
 
 async function getReports() {
   const [rooms, reservations] = await Promise.all([
