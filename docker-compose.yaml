@@ -1,18 +1,22 @@
 services:
-  app:
-    image: image
+  caddy:
+    image: caddy:2-alpine
     ports:
+      - "80:80"
       - "443:443"
-    environment:
-      - DATABASE_URL=
-      - SMTP_HOST=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_SECURE=true
-      - SMTP_USER=
-      - SMTP_PASS=
-      - SMTP_FROM=
-      - ADMIN_PASSWORD=
-      - ADMIN_EMAIL=
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+  app:
+    image: image/name:backend-v1.5
+    ports:
+      - "3000"
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy
@@ -37,3 +41,5 @@ services:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
