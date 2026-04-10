@@ -6,6 +6,9 @@ export const dynamic = 'force-dynamic';
 
 export default async function Users() {
   const users = await prisma.user.findMany({
+    include: {
+      manager: true
+    },
     orderBy: [{ role: "asc" }, { name: "asc" }]
   });
 

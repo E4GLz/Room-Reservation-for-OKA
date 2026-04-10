@@ -3,9 +3,9 @@ export const dynamic = 'force-dynamic';
 
 export const DEFAULT_SETTINGS = {
   id: "default",
-  siteTitle: "Room Reservation Hub",
-  siteDescription:
-    "Internal platform for room bookings, approvals, and planning.",
+  siteTitle: "Obeikan Knowledge Academy",
+  siteTitleArabic: "أكاديمية العبيكان للمعرفة",
+  siteDescription: "Internal platform for room reservations, approvals, visitor agenda, and planning operations across Obeikan Knowledge Academy.",
   workWeekStart: 0,
   workWeekEnd: 4,
   upcomingReminderHours: 24,
@@ -19,11 +19,27 @@ export async function ensureAppSettings() {
     });
 
     if (existing) {
+      const shouldRefreshBranding =
+        existing.siteTitle === "Room Reservation Hub" ||
+        existing.siteTitle === "Nawras" ||
+        existing.siteDescription === "Internal platform for room bookings, approvals, and planning.";
+
+      if (shouldRefreshBranding) {
+        return prisma.appSettings.update({
+          where: { id: DEFAULT_SETTINGS.id },
+          data: {
+            siteTitle: DEFAULT_SETTINGS.siteTitle,
+            siteTitleArabic: DEFAULT_SETTINGS.siteTitleArabic,
+            siteDescription: DEFAULT_SETTINGS.siteDescription
+          },
+          include: { blockedDays: { orderBy: { date: "asc" } } }
+        });
+      }
+
       return {
         ...existing,
-        upcomingReminderHours:
-          existing.upcomingReminderHours ??
-          DEFAULT_SETTINGS.upcomingReminderHours,
+        siteTitleArabic: "siteTitleArabic" in existing ? existing.siteTitleArabic ?? DEFAULT_SETTINGS.siteTitleArabic : DEFAULT_SETTINGS.siteTitleArabic,
+        upcomingReminderHours: existing.upcomingReminderHours ?? DEFAULT_SETTINGS.upcomingReminderHours
       };
     }
 
@@ -36,8 +52,7 @@ export async function ensureAppSettings() {
   } catch (error) {
     if (
       error instanceof Error &&
-      (error.message.includes("AppSettings") ||
-        error.message.includes("upcomingReminderHours"))
+      (error.message.includes("AppSettings") || error.message.includes("upcomingReminderHours") || error.message.includes("siteTitleArabic"))
     ) {
       return {
         ...DEFAULT_SETTINGS,

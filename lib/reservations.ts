@@ -1,8 +1,18 @@
-import { BookingStatus, UserRole, type Prisma, type Reservation, type ReservationAudit, type Room } from "@prisma/client";
+import {
+  BookingStatus,
+  ManagerApprovalStatus,
+  UserRole,
+  type Prisma,
+  type Reservation,
+  type ReservationAudit,
+  type Room,
+  type User
+} from "@prisma/client";
 import { eachDayOfInterval, parseISO } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 import { dateRangesOverlap, describeNotification, hasTimeConflict, toDateKey } from "@/lib/utils";
+import { isEmailConfigured, sendEmail } from "@/lib/email";
 import type { NotificationEvent, ReservationInput } from "@/lib/types";
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +26,12 @@ function getReservationEndDateCompat(reservation: ReservationForSerialization & 
 }
 
 export function isLegacyReservationSchemaError(error: unknown) {
-  return error instanceof Error && error.message.includes("reservationEndDate");
+  return (
+    error instanceof Error &&
+    ["reservationEndDate", "managerApprovalStatus", "managerReviewedAt", "managerReviewerName", "managerReviewerEmail", "managerId"].some((fragment) =>
+      error.message.includes(fragment)
+    )
+  );
 }
 
 function normalizeDateOnly(value: string) {
@@ -183,6 +198,27 @@ export async function validateReservationBusinessRules(
     };
   }
 
+  const requester = await prisma.user.findUnique({
+    where: { email: input.requesterEmail },
+    include: {
+      manager: true
+    }
+  });
+
+  if (!requester) {
+    return {
+      ok: false as const,
+      error: "Requester account was not found."
+    };
+  }
+
+  if (input.createdByRole === UserRole.STANDARD && !requester.managerId) {
+    return {
+      ok: false as const,
+      error: "This user does not have a manager assigned yet. Please contact the admin team."
+    };
+  }
+
   const conflicts = await findConflictingReservations({
     roomId: input.roomId,
     reservationDate: input.reservationDate,
@@ -202,7 +238,9 @@ export async function validateReservationBusinessRules(
 
   return {
     ok: true as const,
-    room
+    room,
+    requester,
+    manager: requester.manager
   };
 }
 
@@ -240,9 +278,9 @@ export function buildReservationWriteData(input: ReservationInput, options?: { l
       requesterName: input.requesterName,
       requesterEmail: input.requesterEmail,
       contactNumber: input.contactNumber || null,
-      attendeesCount: input.attendeesCount,
-      remarks: remarks || null,
-      bookingStatus,
+    attendeesCount: input.attendeesCount,
+    remarks: remarks || null,
+    bookingStatus,
       createdByRole: input.createdByRole,
       overrideCapacity: input.overrideCapacity ?? false,
       cancellationNotes: input.cancellationNotes || null,
@@ -277,6 +315,23 @@ export function buildReservationWriteData(input: ReservationInput, options?: { l
     overrideCapacity: input.overrideCapacity ?? false,
     cancellationNotes: input.cancellationNotes || null,
     cancelledAt: bookingStatus === BookingStatus.CANCELLED ? new Date() : null
+  };
+}
+
+export function getManagerApprovalDefaults(params: {
+  createdByRole: UserRole;
+  managerId?: string | null;
+}) {
+  if (params.createdByRole === UserRole.ADMIN) {
+    return {
+      managerId: null,
+      managerApprovalStatus: ManagerApprovalStatus.NOT_REQUIRED
+    };
+  }
+
+  return {
+    managerId: params.managerId ?? null,
+    managerApprovalStatus: ManagerApprovalStatus.PENDING
   };
 }
 
@@ -338,6 +393,15 @@ export function serializeReservation(reservation: ReservationForSerialization) {
       (record.foodServiceLocation as string | null | undefined) ??
       extractLegacyFoodServiceLocation(reservation.remarks),
     remarks: stripSystemDetailsFromRemarks(reservation.remarks),
+    managerId: (record.managerId as string | null | undefined) ?? null,
+    managerApprovalStatus:
+      (record.managerApprovalStatus as ManagerApprovalStatus | undefined) ?? ManagerApprovalStatus.NOT_REQUIRED,
+    managerReviewedAt:
+      record.managerReviewedAt instanceof Date
+        ? record.managerReviewedAt.toISOString()
+        : ((record.managerReviewedAt as string | null | undefined) ?? null),
+    managerReviewerName: (record.managerReviewerName as string | null | undefined) ?? null,
+    managerReviewerEmail: (record.managerReviewerEmail as string | null | undefined) ?? null,
     createdAt: reservation.createdAt.toISOString(),
     updatedAt: reservation.updatedAt.toISOString(),
     cancelledAt: reservation.cancelledAt?.toISOString() ?? null,
@@ -358,4 +422,52 @@ export function serializeReservation(reservation: ReservationForSerialization) {
         createdAt: entry.createdAt.toISOString()
       })) ?? []
   };
+}
+
+export async function sendManagerApprovalRequestEmail(params: {
+  reservation: ReturnType<typeof serializeReservation>;
+  manager: User;
+}) {
+  if (!isEmailConfigured()) {
+    return;
+  }
+
+  const reservation = params.reservation;
+  const text = [
+    "Room reservation approval required",
+    "",
+    `Requester: ${reservation.requesterName} <${reservation.requesterEmail}>`,
+    `Guest company: ${reservation.guestCompany}`,
+    `Department: ${reservation.chargedDepartment}`,
+    `Room: ${reservation.room.name}`,
+    `Dates: ${reservation.reservationDate.slice(0, 10)} to ${reservation.reservationEndDate.slice(0, 10)}`,
+    `Time: ${reservation.startTime} - ${reservation.endTime}`,
+    `Attendees: ${reservation.attendeesCount}`,
+    `Food service: ${reservation.foodServiceRequired ? `Yes${reservation.foodServiceLocation ? ` (${reservation.foodServiceLocation})` : ""}` : "No"}`
+  ].join("\n");
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
+      <h2 style="margin-bottom: 12px;">Manager approval required</h2>
+      <p><strong>Requester:</strong> ${reservation.requesterName} (${reservation.requesterEmail})</p>
+      <p><strong>Guest company:</strong> ${reservation.guestCompany}</p>
+      <p><strong>Department:</strong> ${reservation.chargedDepartment}</p>
+      <p><strong>Room:</strong> ${reservation.room.name}</p>
+      <p><strong>Dates:</strong> ${reservation.reservationDate.slice(0, 10)} to ${reservation.reservationEndDate.slice(0, 10)}</p>
+      <p><strong>Time:</strong> ${reservation.startTime} - ${reservation.endTime}</p>
+      <p><strong>Attendees:</strong> ${reservation.attendeesCount}</p>
+      <p><strong>Food service:</strong> ${
+        reservation.foodServiceRequired
+          ? `Yes${reservation.foodServiceLocation ? ` (${reservation.foodServiceLocation})` : ""}`
+          : "No"
+      }</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: [params.manager.email],
+    subject: `Approval needed: ${reservation.guestCompany} in ${reservation.room.name}`,
+    text,
+    html
+  });
 }

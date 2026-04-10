@@ -3,6 +3,19 @@ import { prisma } from "@/lib/prisma";
 import { roomSchema } from "@/lib/validation";
 export const dynamic = 'force-dynamic';
 
+function getRoomErrorMessage(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  ) {
+    return "A room with the same code or name already exists.";
+  }
+
+  return error instanceof Error ? error.message : "Unable to save room.";
+}
+
 export async function GET() {
   const rooms = await prisma.room.findMany({
     orderBy: [{ status: "asc" }, { code: "asc" }],
@@ -12,8 +25,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const parsed = roomSchema.safeParse(body);
+  try {
+    const body = await request.json();
+    const parsed = roomSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -43,5 +57,8 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json(room, { status: 201 });
+    return NextResponse.json(room, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: getRoomErrorMessage(error) }, { status: 500 });
+  }
 }

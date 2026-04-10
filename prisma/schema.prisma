@@ -24,6 +24,13 @@ enum BookingStatus {
   CANCELLED
 }
 
+enum ManagerApprovalStatus {
+  NOT_REQUIRED
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum UserStatus {
   ACTIVE
   INACTIVE
@@ -35,8 +42,12 @@ model User {
   email        String     @unique
   passwordHash String
   phoneNumber  String?
+  managerId    String?
   role         UserRole   @default(STANDARD)
   status       UserStatus @default(ACTIVE)
+  manager      User?      @relation("UserManager", fields: [managerId], references: [id])
+  directReports User[]    @relation("UserManager")
+  managedReservations Reservation[] @relation("ReservationManager")
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 }
@@ -44,6 +55,7 @@ model User {
 model AppSettings {
   id             String      @id @default("default")
   siteTitle      String      @default("Room Reservation Hub")
+  siteTitleArabic String?
   siteDescription String     @default("Internal platform for room bookings, approvals, and planning.")
   workWeekStart  Int         @default(0)
   workWeekEnd    Int         @default(4)
@@ -83,6 +95,7 @@ model Reservation {
   id                String            @id @default(cuid())
   reservationCode   String            @unique
   roomId            String
+  managerId         String?
   reservationDate   DateTime
   reservationEndDate DateTime
   startTime         String
@@ -104,16 +117,22 @@ model Reservation {
   attendeesCount    Int
   remarks           String?
   bookingStatus     BookingStatus     @default(PENDING)
+  managerApprovalStatus ManagerApprovalStatus @default(NOT_REQUIRED)
+  managerReviewedAt DateTime?
+  managerReviewerName String?
+  managerReviewerEmail String?
   createdByRole     UserRole          @default(STANDARD)
   overrideCapacity  Boolean           @default(false)
   cancelledAt       DateTime?
   cancellationNotes String?
   room              Room              @relation(fields: [roomId], references: [id])
+  manager           User?             @relation("ReservationManager", fields: [managerId], references: [id])
   auditEntries      ReservationAudit[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
   @@index([roomId, reservationDate])
+  @@index([managerId, managerApprovalStatus, bookingStatus])
 }
 
 model ReservationAudit {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RoomStatus } from "@prisma/client";
 import { ROOM_TYPES } from "@/lib/constants";
 import type { RoomFormValues, RoomRecord } from "@/lib/types";
@@ -27,32 +27,55 @@ export function RoomForm({
   onSaved
 }: {
   room?: RoomRecord | null;
-  onSaved?: () => void;
+  onSaved?: (action: "added" | "updated") => void;
 }) {
   const [form, setForm] = useState<RoomFormValues>(() => initialValues(room));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    setForm(initialValues(room));
+    setError("");
+    setSaving(false);
+  }, [room]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError("");
 
-    const response = await fetch(room ? `/api/rooms/${room.id}` : "/api/rooms", {
-      method: room ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form)
-    });
+    try {
+      const response = await fetch(room ? `/api/rooms/${room.id}` : "/api/rooms", {
+        method: room ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
 
-    if (!response.ok) {
-      const payload = await response.json();
-      setError(payload.error?.formErrors?.[0] || "Unable to save room.");
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type") ?? "";
+        let message = "Unable to save room.";
+
+        if (contentType.includes("application/json")) {
+          const payload = await response.json();
+          message = payload.error?.formErrors?.[0] || payload.error || message;
+        } else {
+          const text = await response.text();
+          if (text.trim()) {
+            message = text;
+          }
+        }
+
+        setError(message);
+        setSaving(false);
+        return;
+      }
+
       setSaving(false);
-      return;
+      onSaved?.(room ? "updated" : "added");
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Unable to save room.");
+      setSaving(false);
     }
-
-    setSaving(false);
-    onSaved?.();
   }
 
   return (

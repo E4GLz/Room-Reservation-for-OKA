@@ -23,6 +23,16 @@ body {
   min-height: 100vh;
 }
 
+html[dir="rtl"] body {
+  direction: rtl;
+}
+
+html[dir="rtl"] input,
+html[dir="rtl"] textarea,
+html[dir="rtl"] select {
+  text-align: right;
+}
+
 body::before {
   content: "";
   position: fixed;
