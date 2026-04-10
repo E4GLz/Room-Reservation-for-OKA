@@ -19,7 +19,6 @@ build/
 prisma/migrations/dev/
 prisma/dev.db
 prisma/dev.db-journal
-prisma
 
 # Logs
 npm-debug.log*
