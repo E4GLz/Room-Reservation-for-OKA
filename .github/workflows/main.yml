@@ -68,9 +68,9 @@ jobs:
           VERSION="${{ steps.version.outputs.VERSION }}"
           docker build \
             --build-arg DATABASE_URL=${{ secrets.DATABASE_URL }} \
-            -t $USERNAME/app:backend-v$VERSION \
+            -t $USERNAME/roombooking:app-v$VERSION \
             --no-cache .
-          docker push $USERNAME/app:backend-v$VERSION
+          docker push $USERNAME/roombooking:app-v$VERSION
 
       - name: Copy .env to VM
         uses: appleboy/scp-action@v0.1.4
@@ -88,6 +88,8 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.VM_PRIVATE_KEY }}
           script: |
+            USERNAME=$(echo "${{ secrets.DOCKER_HUB_USERNAME }}" | tr -d '[:space:]')
+            VERSION="${{ steps.version.outputs.VERSION }}"
             cd deployment/
             docker compose -f docker-compose.yaml down
             sed -i '/^  app:/{n;s|image: .*$|image: ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:app-v${{ steps.version.outputs.VERSION }}|}' docker-compose.yaml
