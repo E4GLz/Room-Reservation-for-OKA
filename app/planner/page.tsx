@@ -5,6 +5,7 @@ import { getAppSettings } from "@/lib/settings";
 import { serializeSettings } from "@/lib/utils";
 import type { AppSettingsRecord, FilterState, PlannerView } from "@/lib/types";
 import { BookingStatus } from "@prisma/client";
+export const dynamic = 'force-dynamic';
 
 async function getRooms() {
   const rooms = await prisma.room.findMany({

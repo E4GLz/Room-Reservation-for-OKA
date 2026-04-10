@@ -4,6 +4,7 @@ import { getDashboardData } from "@/lib/dashboard";
 import { createAuditEntry } from "@/lib/reservations";
 import { formatLongDate } from "@/lib/utils";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
+export const dynamic = 'force-dynamic'
 
 export async function POST() {
   if (!isEmailConfigured()) {

@@ -3,6 +3,7 @@ import { hashPassword, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { serializeUser } from "@/lib/utils";
 import { profileSchema } from "@/lib/validation";
+export const dynamic = 'force-dynamic';
 
 export async function PUT(request: Request) {
   const body = await request.json();

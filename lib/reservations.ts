@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 import { dateRangesOverlap, describeNotification, hasTimeConflict, toDateKey } from "@/lib/utils";
 import type { NotificationEvent, ReservationInput } from "@/lib/types";
+export const dynamic = 'force-dynamic';
 
 type ReservationForSerialization = Reservation & {
   room: Room;

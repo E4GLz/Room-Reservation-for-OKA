@@ -11,6 +11,7 @@ import {
 } from "@/lib/reservations";
 import { reservationSchema } from "@/lib/validation";
 import { ReservationInput } from "@/lib/types";
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
