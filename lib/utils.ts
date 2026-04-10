@@ -222,8 +222,8 @@ export function groupReservationsByDateAndRoom(
 
   reservations.forEach((reservation) => {
     const reservationDates = eachDayOfInterval({
-      start: parseISO(reservation.reservationDate),
-      end: parseISO(reservation.reservationEndDate)
+      start: parseISO(reservation.reservationDate?.toString() ?? ""),
+      end: parseISO(reservation.reservationEndDate?.toString() ?? "")
     });
 
     for (const date of reservationDates) {

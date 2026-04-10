@@ -1,0 +1,33 @@
+# Dependencies (reinstalled inside Docker)
+node_modules/
+npm-debug.log*
+
+# Next.js build output
+.next/
+out/
+
+# Environment files (inject at runtime via docker-compose or -e flags)
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Misc
+*.tsbuildinfo
+README.md

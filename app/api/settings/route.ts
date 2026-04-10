@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAppSettings } from "@/lib/settings";
 import { serializeSettings } from "@/lib/utils";
 import { settingsSchema } from "@/lib/validation";
+export const dynamic = 'force-dynamic';
 
 function normalizeDateOnly(value: string) {
   const [year, month, day] = value.split("-").map(Number);

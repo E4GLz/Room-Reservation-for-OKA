@@ -1,10 +1,12 @@
 import { SettingsPage } from "@/components/settings/settings-page";
 import { PageHeader } from "@/components/ui/page-header";
 import { getAppSettings } from "@/lib/settings";
+import { AppSettingsRecord } from "@/lib/types";
 import { serializeSettings } from "@/lib/utils";
 
 export default async function Settings() {
   const settings = await getAppSettings();
+  const appSetting = serializeSettings(settings) as AppSettingsRecord;
 
   return (
     <>
@@ -13,7 +15,7 @@ export default async function Settings() {
         title="Booking Settings"
         description="Manage blocked booking dates, workweek layout, and shared platform labels used across the reservation system."
       />
-      <SettingsPage settings={serializeSettings(settings)} />
+      <SettingsPage settings={appSetting} />
     </>
   );
 }

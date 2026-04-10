@@ -4,7 +4,8 @@ import { AppShell } from "@/components/layout/app-shell";
 import { LanguageProvider } from "@/components/providers/language-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { getAppSettings } from "@/lib/settings";
-
+export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store';
 export const metadata: Metadata = {
   title: "Obeikan Knowledge Academy",
   description: "Obeikan Knowledge Academy room reservation platform for booking control, approvals, visitor agenda, planner operations, users, and reporting."

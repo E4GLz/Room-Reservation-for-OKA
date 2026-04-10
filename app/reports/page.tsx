@@ -3,6 +3,7 @@ import { ReportsPage } from "@/components/reports/reports-page";
 import { BookingStatus } from "@prisma/client";
 import { addMonths, eachDayOfInterval, format, max as maxDate, min as minDate, startOfMonth } from "date-fns";
 import { prisma } from "@/lib/prisma";
+export const dynamic = 'force-dynamic';
 
 function getOccupiedHours(reservation: {
   startTime: string;

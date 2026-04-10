@@ -1,6 +1,6 @@
 "use client";
 
-import type { RoomRecord } from "@/lib/types";
+import type { FilterState, RoomRecord } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { RESERVATION_TYPES } from "@/lib/constants";
@@ -12,13 +12,8 @@ export function PlannerFilters({
   onChange
 }: {
   rooms: RoomRecord[];
-  filters: {
-    roomId: string;
-    eventType: string;
-    status: string;
-    search: string;
-  };
-  onChange: (next: { roomId: string; eventType: string; status: string; search: string }) => void;
+  filters: FilterState;
+  onChange: (next: FilterState) => void
 }) {
   const { t } = useLanguage();
 
@@ -42,7 +37,7 @@ export function PlannerFilters({
         ))}
       </Select>
 
-      <Select value={filters.status} onChange={(event) => onChange({ ...filters, status: event.target.value })}>
+      <Select value={filters.status} onChange={(event) => onChange({ ...filters, status: event.target.value as FilterState["status"] })}>
         <option value="">{t("All statuses")}</option>
         <option value="PENDING">{t("Pending")}</option>
         <option value="CONFIRMED">{t("Confirmed")}</option>

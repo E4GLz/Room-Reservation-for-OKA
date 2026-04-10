@@ -1,5 +1,6 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
+export const dynamic = 'force-dynamic';
 
 const DEFAULT_ADMIN_EMAIL = "admin@company.internal";
 const DEFAULT_ADMIN_PASSWORD = "Admin@123";

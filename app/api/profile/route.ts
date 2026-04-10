@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { validateUniqueUserIdentity } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { profileSchema } from "@/lib/validation";
+export const dynamic = 'force-dynamic';
 
 export async function PUT(request: Request) {
   const body = await request.json();

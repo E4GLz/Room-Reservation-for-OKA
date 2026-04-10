@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { RoomsPage } from "@/components/rooms/rooms-page";
 import { prisma } from "@/lib/prisma";
+export const dynamic = 'force-dynamic';
 
 async function getRooms() {
   return prisma.room.findMany({

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+export const dynamic = 'force-dynamic';
 
 export const DEFAULT_SETTINGS = {
   id: "default",
@@ -7,14 +8,14 @@ export const DEFAULT_SETTINGS = {
   siteDescription: "Internal platform for room reservations, approvals, visitor agenda, and planning operations across Obeikan Knowledge Academy.",
   workWeekStart: 0,
   workWeekEnd: 4,
-  upcomingReminderHours: 24
+  upcomingReminderHours: 24,
 };
 
 export async function ensureAppSettings() {
   try {
     const existing = await prisma.appSettings.findUnique({
       where: { id: DEFAULT_SETTINGS.id },
-      include: { blockedDays: { orderBy: { date: "asc" } } }
+      include: { blockedDays: { orderBy: { date: "asc" } } },
     });
 
     if (existing) {
@@ -42,9 +43,11 @@ export async function ensureAppSettings() {
       };
     }
 
-    return prisma.appSettings.create({
-      data: DEFAULT_SETTINGS,
-      include: { blockedDays: { orderBy: { date: "asc" } } }
+    return prisma.appSettings.upsert({
+      where: { id: DEFAULT_SETTINGS.id },
+      update: {},
+      create: DEFAULT_SETTINGS,
+      include: { blockedDays: { orderBy: { date: "asc" } } },
     });
   } catch (error) {
     if (
@@ -55,7 +58,7 @@ export async function ensureAppSettings() {
         ...DEFAULT_SETTINGS,
         blockedDays: [],
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
     }
 

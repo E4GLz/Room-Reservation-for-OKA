@@ -19,13 +19,14 @@ import {
 } from "@/lib/utils";
 import type { ReservationRecord, RoomRecord } from "@/lib/types";
 
-export function BookingDetailPage({
-  reservation,
-  rooms
-}: {
+type BookingDetailPageProps = {
   reservation: ReservationRecord;
   rooms: RoomRecord[];
-}) {
+};
+
+
+export function BookingDetailPage(props: BookingDetailPageProps) {
+  const { reservation, rooms } = props;
   const router = useRouter();
   const { t } = useLanguage();
   const { user } = useSession();

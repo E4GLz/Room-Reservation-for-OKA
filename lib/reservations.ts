@@ -14,6 +14,7 @@ import { getAppSettings } from "@/lib/settings";
 import { dateRangesOverlap, describeNotification, hasTimeConflict, toDateKey } from "@/lib/utils";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 import type { NotificationEvent, ReservationInput } from "@/lib/types";
+export const dynamic = 'force-dynamic';
 
 type ReservationForSerialization = Reservation & {
   room: Room;
@@ -259,6 +260,16 @@ export function buildReservationWriteData(input: ReservationInput, options?: { l
     return {
       roomId: input.roomId,
       reservationDate: normalizeDateOnly(input.reservationDate),
+      reservationEndDate: normalizeDateOnly(input.reservationDate),
+      reservationType: input.reservationType ?? null,
+      guestCompany: input.guestCompany ?? null,
+      guestName: input.guestName ?? null,
+      guestCompanyLogo: input.guestCompanyLogo ?? null,
+      chargedCompany: input.chargedCompany ?? null,
+      chargedDepartment: input.chargedDepartment ?? null,
+      materialsToDisplay: input.materialsToDisplay ?? null,
+      foodServiceRequired: input.foodServiceRequired,
+      foodServiceLocation: input.foodServiceLocation ?? null,
       startTime: input.startTime,
       endTime: input.endTime,
       bookingCompany: input.guestCompany,
