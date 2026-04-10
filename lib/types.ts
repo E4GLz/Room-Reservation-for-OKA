@@ -15,9 +15,9 @@ export type UserRecord = AppUser & {
   updatedAt?: string | Date;
 };
 
-export type RoomRecord = Room & {
-  createdAt?: string | Date;
-  updatedAt?: string | Date;
+export type RoomRecord = Omit<Room, 'createdAt' | 'updatedAt'> & {
+  createdAt: string | Date;
+  updatedAt: string | Date;
 };
 
 export type ReservationAuditRecord = {
@@ -29,41 +29,41 @@ export type ReservationAuditRecord = {
   actorRole: UserRole;
   notes: string | null;
   snapshot: string | null;
-  createdAt: string;
+  createdAt: string | Date;
 };
 
 export type ReservationRecord = {
   id: string;
   reservationCode: string;
   roomId: string;
-  reservationDate: string;
-  reservationEndDate: string;
+  reservationDate: string | Date;
+  reservationEndDate: string | Date;
   startTime: string;
   endTime: string;
   reservationType: string;
   guestCompany: string;
-  guestName: string | null;
-  guestCompanyLogo: string | null;
+  guestName?: string;
+  guestCompanyLogo?: string;
   chargedCompany: string;
   chargedDepartment: string;
-  materialsToDisplay: string | null;
+  materialsToDisplay?: string;
   foodServiceRequired: boolean;
-  foodServiceLocation: string | null;
+  foodServiceLocation?: string;
   bookingCompany: string;
   meetingName: string;
   eventType: string;
   requesterName: string;
   requesterEmail: string;
-  contactNumber: string | null;
+  contactNumber?: string;
   attendeesCount: number;
-  remarks: string | null;
+  remarks?: string;
   bookingStatus: BookingStatus;
   createdByRole: UserRole;
   overrideCapacity: boolean;
-  cancelledAt: string | null;
-  cancellationNotes: string | null;
-  createdAt: string;
-  updatedAt: string;
+  cancelledAt?: string | Date;
+  cancellationNotes?: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
   room: RoomRecord;
   auditEntries?: ReservationAuditRecord[];
 };

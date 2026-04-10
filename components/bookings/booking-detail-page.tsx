@@ -11,13 +11,14 @@ import { useSession } from "@/components/providers/session-provider";
 import { formatLongDate, reservationCanBeEditedByUser } from "@/lib/utils";
 import type { ReservationRecord, RoomRecord } from "@/lib/types";
 
-export function BookingDetailPage({
-  reservation,
-  rooms
-}: {
+type BookingDetailPageProps = {
   reservation: ReservationRecord;
   rooms: RoomRecord[];
-}) {
+};
+
+
+export function BookingDetailPage(props: BookingDetailPageProps) {
+  const { reservation, rooms } = props;
   const router = useRouter();
   const { user } = useSession();
   const canView = user?.role === "ADMIN" || reservation.requesterEmail === user?.email;

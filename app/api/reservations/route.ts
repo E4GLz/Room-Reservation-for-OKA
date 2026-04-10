@@ -10,6 +10,7 @@ import {
   validateReservationBusinessRules
 } from "@/lib/reservations";
 import { reservationSchema } from "@/lib/validation";
+import { ReservationInput } from "@/lib/types";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -102,7 +103,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const validation = await validateReservationBusinessRules(parsed.data);
+  const validation = await validateReservationBusinessRules(parsed.data as ReservationInput);
   if (!validation.ok) {
     return NextResponse.json(
       {
@@ -120,8 +121,9 @@ export async function POST(request: Request) {
   try {
     reservation = await prisma.reservation.create({
       data: {
+        ...buildReservationWriteData(parsed.data as ReservationInput),
         reservationCode: `RSV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`,
-        ...buildReservationWriteData(parsed.data)
+
       },
       include: {
         room: true,
@@ -136,7 +138,7 @@ export async function POST(request: Request) {
     reservation = await prisma.reservation.create({
       data: {
         reservationCode: `RSV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`,
-        ...buildReservationWriteData(parsed.data, { legacy: true })
+        ...buildReservationWriteData(parsed.data as ReservationInput, { legacy: true })
       },
       include: {
         room: true,

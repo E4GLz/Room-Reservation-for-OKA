@@ -10,6 +10,7 @@ import {
   validateReservationBusinessRules
 } from "@/lib/reservations";
 import { reservationSchema } from "@/lib/validation";
+import { ReservationInput } from "@/lib/types";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -39,7 +40,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const validation = await validateReservationBusinessRules(parsed.data, id);
+  const validation = await validateReservationBusinessRules(parsed.data as ReservationInput, id);
   if (!validation.ok) {
     return NextResponse.json(
       {
@@ -57,7 +58,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     reservation = await prisma.reservation.update({
       where: { id },
       data: {
-        ...buildReservationWriteData(parsed.data)
+        ...buildReservationWriteData(parsed.data as ReservationInput)
       },
       include: {
         room: true,
@@ -72,7 +73,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     reservation = await prisma.reservation.update({
       where: { id },
       data: {
-        ...buildReservationWriteData(parsed.data, { legacy: true })
+        ...buildReservationWriteData(parsed.data as ReservationInput, { legacy: true })
       },
       include: {
         room: true,
