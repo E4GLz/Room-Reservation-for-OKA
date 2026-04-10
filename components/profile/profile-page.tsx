@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatePanel } from "@/components/ui/state-panel";
 import { useSession } from "@/components/providers/session-provider";
+import { readErrorMessage } from "@/lib/client-errors";
 
 export function ProfilePage() {
   const router = useRouter();
@@ -47,25 +48,30 @@ export function ProfilePage() {
     setSaving(true);
     setError("");
 
-    const response = await fetch("/api/profile", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: user.id,
-        ...form
-      })
-    });
+    try {
+      const response = await fetch("/api/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: user.id,
+          ...form
+        })
+      });
 
-    const payload = await response.json();
-    if (!response.ok) {
-      setError(payload.error || payload.error?.formErrors?.[0] || "Unable to update profile.");
+      if (!response.ok) {
+        setError(await readErrorMessage(response, "Unable to update profile."));
+        setSaving(false);
+        return;
+      }
+
+      const payload = await response.json();
+      updateSessionUser(payload.user);
       setSaving(false);
-      return;
+      setForm((current) => ({ ...current, currentPassword: "", newPassword: "" }));
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to update profile.");
+      setSaving(false);
     }
-
-    updateSessionUser(payload.user);
-    setSaving(false);
-    setForm((current) => ({ ...current, currentPassword: "", newPassword: "" }));
   }
 
   return (

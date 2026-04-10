@@ -2,22 +2,48 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { roomSchema } from "@/lib/validation";
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const body = await request.json();
-  const parsed = roomSchema.safeParse(body);
-
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+function getRoomErrorMessage(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  ) {
+    return "A room with the same code or name already exists.";
   }
 
-  const room = await prisma.room.update({
-    where: { id },
-    data: {
-      ...parsed.data,
-      notes: parsed.data.notes || null
-    }
-  });
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2025"
+  ) {
+    return "Room not found.";
+  }
 
-  return NextResponse.json(room);
+  return error instanceof Error ? error.message : "Unable to save room.";
+}
+
+export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const body = await request.json();
+    const parsed = roomSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    }
+
+    const room = await prisma.room.update({
+      where: { id },
+      data: {
+        ...parsed.data,
+        notes: parsed.data.notes || null
+      }
+    });
+
+    return NextResponse.json(room);
+  } catch (error) {
+    return NextResponse.json({ error: getRoomErrorMessage(error) }, { status: 500 });
+  }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ensureDefaultAdmin, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { findUserByEmailInsensitive, normalizeEmail } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { loginSchema } from "@/lib/validation";
 
@@ -14,12 +15,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid email or password." }, { status: 400 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { email: parsed.data.email }
-  });
+  const matchedUser = await findUserByEmailInsensitive(parsed.data.email);
 
-  if (!user || user.status !== "ACTIVE" || !verifyPassword(parsed.data.password, user.passwordHash)) {
+  const user = matchedUser
+    ? await prisma.user.findUnique({
+        where: { email: normalizeEmail(matchedUser.email) },
+        include: {
+          manager: true
+        }
+      }).catch(async () =>
+        prisma.user.findUnique({
+          where: { id: matchedUser.id },
+          include: {
+            manager: true
+          }
+        })
+      )
+    : null;
+
+  if (!user || !verifyPassword(parsed.data.password, user.passwordHash)) {
     return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+  }
+
+  if (user.status !== "ACTIVE") {
+    return NextResponse.json(
+      { error: "Your account is waiting for admin approval. Please contact the administrator if you need access urgently." },
+      { status: 403 }
+    );
   }
 
   return NextResponse.json({

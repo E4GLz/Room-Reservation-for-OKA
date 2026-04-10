@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import "@/app/globals.css";
 import { AppShell } from "@/components/layout/app-shell";
+import { LanguageProvider } from "@/components/providers/language-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { getAppSettings } from "@/lib/settings";
 
 export const metadata: Metadata = {
-  title: "Internal Room Reservation Platform",
-  description: "Company room reservation platform for booking control, approvals, planner operations, users, and reporting."
+  title: "Obeikan Knowledge Academy",
+  description: "Obeikan Knowledge Academy room reservation platform for booking control, approvals, visitor agenda, planner operations, users, and reporting."
 };
 
 export default async function RootLayout({
@@ -19,11 +20,17 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body>
-        <SessionProvider>
-          <AppShell siteTitle={settings.siteTitle} siteDescription={settings.siteDescription}>
-            {children}
-          </AppShell>
-        </SessionProvider>
+        <LanguageProvider>
+          <SessionProvider>
+            <AppShell
+              siteTitle={settings.siteTitle}
+              siteTitleArabic={"siteTitleArabic" in settings ? settings.siteTitleArabic : null}
+              siteDescription={settings.siteDescription}
+            >
+              {children}
+            </AppShell>
+          </SessionProvider>
+        </LanguageProvider>
       </body>
     </html>
   );

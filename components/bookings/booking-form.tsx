@@ -10,7 +10,15 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import type { ReservationInput, ReservationRecord, RoomRecord } from "@/lib/types";
 import { RESERVATION_TYPES } from "@/lib/constants";
+import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
+import {
+  parseStoredAttachments,
+  serializeSingleStoredAttachment,
+  serializeStoredAttachments,
+  type StoredAttachment
+} from "@/lib/attachments";
+import { extractFlattenedFormError, readErrorMessage } from "@/lib/client-errors";
 import { toInputDate } from "@/lib/utils";
 
 type FormState = Omit<ReservationInput, "foodServiceRequired"> & {
@@ -67,17 +75,29 @@ export function BookingForm({
 }) {
   const router = useRouter();
   const { user } = useSession();
+  const { t } = useLanguage();
   const [form, setForm] = useState<FormState>(() =>
     buildInitialState(rooms, reservation, user?.role, user?.name, user?.email)
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string>("");
   const [conflicts, setConflicts] = useState<ReservationRecord[]>([]);
+  const [selectedGuestLogoFiles, setSelectedGuestLogoFiles] = useState<File[]>([]);
+  const [selectedMaterialFiles, setSelectedMaterialFiles] = useState<File[]>([]);
 
   const filteredRooms = useMemo(
     () => rooms.filter((room) => room.type === form.reservationType),
     [form.reservationType, rooms]
   );
+
+  useEffect(() => {
+    setForm(buildInitialState(rooms, reservation, user?.role, user?.name, user?.email));
+    setError("");
+    setConflicts([]);
+    setSaving(false);
+    setSelectedGuestLogoFiles([]);
+    setSelectedMaterialFiles([]);
+  }, [reservation, rooms, user?.role, user?.name, user?.email]);
 
   useEffect(() => {
     if (!filteredRooms.some((room) => room.id === form.roomId)) {
@@ -114,21 +134,29 @@ export function BookingForm({
       }
     }
 
-    return "Unable to save reservation.";
+    return t("Unable to save reservation.");
   }
 
-  function handleSingleFileName(field: "guestCompanyLogo", files: FileList | null) {
-    setForm((current) => ({
-      ...current,
-      [field]: files?.[0]?.name ?? ""
-    }));
-  }
+  async function uploadFiles(files: File[], kind: "logo" | "materials") {
+    if (files.length === 0) {
+      return [] as StoredAttachment[];
+    }
 
-  function handleMultiFileNames(field: "materialsToDisplay", files: FileList | null) {
-    setForm((current) => ({
-      ...current,
-      [field]: files ? Array.from(files).map((file) => file.name).join(", ") : ""
-    }));
+    const formData = new FormData();
+    formData.append("kind", kind);
+    files.forEach((file) => formData.append("files", file));
+
+    const response = await fetch("/api/uploads", {
+      method: "POST",
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(await readErrorMessage(response, t("Unable to upload files.")));
+    }
+
+    const payload = await response.json();
+    return (payload.files ?? []) as StoredAttachment[];
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -140,60 +168,123 @@ export function BookingForm({
     const endpoint = reservation ? `/api/reservations/${reservation.id}` : "/api/reservations";
     const method = reservation ? "PUT" : "POST";
 
-    const payloadBody = {
-      ...form,
-      requesterName: user?.name ?? form.requesterName,
-      requesterEmail: user?.email ?? form.requesterEmail,
-      createdByRole: user?.role ?? form.createdByRole,
-      bookingStatus: adminManaged ? BookingStatus.CONFIRMED : BookingStatus.PENDING,
-      foodServiceRequired: Boolean(form.foodServiceRequired),
-      foodServiceLocation: form.foodServiceRequired ? form.foodServiceLocation : ""
-    };
+    let guestCompanyLogo = form.guestCompanyLogo;
+    let materialsToDisplay = form.materialsToDisplay;
 
-    const response = await fetch(endpoint, {
-      method,
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payloadBody)
-    });
+    try {
+      if (selectedGuestLogoFiles.length > 0) {
+        const uploadedLogo = await uploadFiles(selectedGuestLogoFiles, "logo");
+        guestCompanyLogo = serializeSingleStoredAttachment(uploadedLogo[0]);
+      }
 
-    const payload = await response.json();
-
-    if (!response.ok) {
-      setError(getErrorMessage(payload.error));
-      setConflicts(payload.conflicts || []);
+      if (selectedMaterialFiles.length > 0) {
+        const uploadedMaterials = await uploadFiles(selectedMaterialFiles, "materials");
+        materialsToDisplay = serializeStoredAttachments(uploadedMaterials);
+      }
+    } catch (uploadError) {
+      setError(uploadError instanceof Error ? uploadError.message : t("Unable to upload files."));
       setSaving(false);
       return;
     }
 
-    setSaving(false);
-    if (onSaved) {
-      onSaved(payload);
-      return;
-    }
+    const payloadBody = {
+      ...form,
+      guestCompanyLogo,
+      materialsToDisplay,
+      requesterName: reservation ? form.requesterName : user?.name ?? form.requesterName,
+      requesterEmail: reservation ? form.requesterEmail : user?.email ?? form.requesterEmail,
+      createdByRole: reservation?.createdByRole ?? user?.role ?? form.createdByRole,
+      bookingStatus:
+        adminManaged && reservation?.createdByRole === UserRole.STANDARD && reservation.managerApprovalStatus === "PENDING"
+          ? BookingStatus.PENDING
+          : adminManaged
+            ? BookingStatus.CONFIRMED
+            : BookingStatus.PENDING,
+      foodServiceRequired: Boolean(form.foodServiceRequired),
+      foodServiceLocation: form.foodServiceRequired ? form.foodServiceLocation : ""
+    };
 
-    router.push(`/bookings/${payload.reservation.id}`);
-    router.refresh();
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payloadBody)
+      });
+
+      if (!response.ok) {
+        let conflictPayload: unknown = null;
+        const contentType = response.headers.get("content-type") ?? "";
+
+        if (contentType.includes("application/json")) {
+          try {
+            conflictPayload = await response.json();
+          } catch {
+            conflictPayload = null;
+          }
+        }
+
+        setError(
+          conflictPayload
+            ? getErrorMessage(
+                typeof conflictPayload === "object" &&
+                  conflictPayload !== null &&
+                  "error" in conflictPayload
+                  ? (conflictPayload as { error?: unknown }).error
+                  : conflictPayload
+              )
+            : await readErrorMessage(response, t("Unable to save reservation."), extractFlattenedFormError)
+        );
+        setConflicts(
+          conflictPayload &&
+            typeof conflictPayload === "object" &&
+            conflictPayload !== null &&
+            "conflicts" in conflictPayload &&
+            Array.isArray((conflictPayload as { conflicts?: unknown }).conflicts)
+            ? ((conflictPayload as { conflicts?: ReservationRecord[] }).conflicts ?? [])
+            : []
+        );
+        setSaving(false);
+        return;
+      }
+
+      const payload = await response.json();
+      setSaving(false);
+      if (onSaved) {
+        onSaved(payload);
+        return;
+      }
+
+      router.push(`/bookings/${payload.reservation.id}`);
+      router.refresh();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : t("Unable to save reservation."));
+      setConflicts([]);
+      setSaving(false);
+    }
   }
+
+  const existingLogoAttachments = parseStoredAttachments(form.guestCompanyLogo);
+  const existingMaterialAttachments = parseStoredAttachments(form.materialsToDisplay);
 
   return (
     <Card className="p-6">
       <form className="space-y-5" onSubmit={handleSubmit}>
         <div className="grid gap-4 lg:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Reservation type *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Reservation type")} *</label>
             <Select value={form.reservationType} required onChange={(event) => setForm({ ...form, reservationType: event.target.value })}>
               {RESERVATION_TYPES.map((type) => (
                 <option key={type} value={type}>
-                  {type}
+                  {t(type)}
                 </option>
               ))}
             </Select>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Room *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Room")} *</label>
             <Select value={form.roomId} required onChange={(event) => setForm({ ...form, roomId: event.target.value })}>
               {filteredRooms.length > 0 ? (
                 filteredRooms.map((room) => (
@@ -203,19 +294,19 @@ export function BookingForm({
                 ))
               ) : (
                 <option value="" disabled>
-                  No rooms available for this reservation type
+                  {t("No rooms available for this reservation type")}
                 </option>
               )}
             </Select>
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Date from *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Date from")} *</label>
             <Input required type="date" value={form.reservationDate} onChange={(event) => setForm({ ...form, reservationDate: event.target.value })} />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Date to *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Date to")} *</label>
             <Input
               required
               type="date"
@@ -225,18 +316,18 @@ export function BookingForm({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Time from *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Time from")} *</label>
             <Input required type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Time to *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Time to")} *</label>
             <Input required type="time" value={form.endTime} onChange={(event) => setForm({ ...form, endTime: event.target.value })} />
           </div>
 
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">
-              Number of attend * {selectedRoom ? `(capacity ${selectedRoom.capacity})` : ""}
+              {t("Number of attend")} * {selectedRoom ? `(${t("capacity")} ${selectedRoom.capacity})` : ""}
             </label>
             <Input
               required
@@ -248,33 +339,37 @@ export function BookingForm({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Guest company *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Guest company")} *</label>
             <Input required value={form.guestCompany} onChange={(event) => setForm({ ...form, guestCompany: event.target.value })} />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Guest name</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Guest name")}</label>
             <Input value={form.guestName} onChange={(event) => setForm({ ...form, guestName: event.target.value })} />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Guest company logo</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Guest company logo")}</label>
             <Input
               type="file"
               accept=".png,.jpg,.jpeg,.webp,.svg,.gif,.bmp,.tif,.tiff,.avif,.heic,image/*"
-              onChange={(event) => handleSingleFileName("guestCompanyLogo", event.target.files)}
+              onChange={(event) => setSelectedGuestLogoFiles(event.target.files ? Array.from(event.target.files).slice(0, 1) : [])}
             />
-            <p className="mt-2 text-xs text-slate-500">Accepted image formats include PNG, JPG, WEBP, SVG, GIF, BMP, TIFF, AVIF, and HEIC.</p>
-            {form.guestCompanyLogo ? <p className="mt-2 text-xs text-slate-500">{form.guestCompanyLogo}</p> : null}
+            <p className="mt-2 text-xs text-slate-500">{t("Accepted image formats include PNG, JPG, WEBP, SVG, GIF, BMP, TIFF, AVIF, and HEIC.")}</p>
+            {selectedGuestLogoFiles.length > 0 ? (
+              <p className="mt-2 text-xs text-slate-500">{selectedGuestLogoFiles[0]?.name}</p>
+            ) : existingLogoAttachments[0]?.name ? (
+              <p className="mt-2 text-xs text-slate-500">{existingLogoAttachments[0].name}</p>
+            ) : null}
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Charged company *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Charged company")} *</label>
             <Input required value={form.chargedCompany} onChange={(event) => setForm({ ...form, chargedCompany: event.target.value })} />
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Charged department *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Charged department")} *</label>
             <Input
               required
               value={form.chargedDepartment}
@@ -283,21 +378,25 @@ export function BookingForm({
           </div>
 
           <div className="lg:col-span-2">
-            <label className="mb-2 block text-sm font-medium text-slate-700">Materials to be displayed on screen</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Materials to be displayed on screen")}</label>
             <Input
               type="file"
               multiple
               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.rtf,.odt,.ods,.odp,.png,.jpg,.jpeg,.webp"
-              onChange={(event) => handleMultiFileNames("materialsToDisplay", event.target.files)}
+              onChange={(event) => setSelectedMaterialFiles(event.target.files ? Array.from(event.target.files) : [])}
             />
-            <p className="mt-2 text-xs text-slate-500">Accepted formats include PDF, Word, Excel, PowerPoint, text, CSV, and common image files.</p>
-            {form.materialsToDisplay ? <p className="mt-2 text-xs text-slate-500">{form.materialsToDisplay}</p> : null}
+            <p className="mt-2 text-xs text-slate-500">{t("Accepted formats include PDF, Word, Excel, PowerPoint, text, CSV, and common image files.")}</p>
+            {selectedMaterialFiles.length > 0 ? (
+              <p className="mt-2 text-xs text-slate-500">{selectedMaterialFiles.map((file) => file.name).join(", ")}</p>
+            ) : existingMaterialAttachments.length > 0 ? (
+              <p className="mt-2 text-xs text-slate-500">{existingMaterialAttachments.map((file) => file.name).join(", ")}</p>
+            ) : null}
           </div>
         </div>
 
         <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Room for food service?</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Room for food service?")}</label>
             <Select
               value={
                 form.foodServiceRequired === null
@@ -320,31 +419,31 @@ export function BookingForm({
               }
             >
               <option value="" disabled>
-                Select food service option
+                {t("Select food service option")}
               </option>
-              <option value="no">No</option>
-              <option value="yes">Yes</option>
+              <option value="no">{t("No")}</option>
+              <option value="yes">{t("Yes")}</option>
             </Select>
           </div>
 
           {form.foodServiceRequired ? (
             <div className="space-y-3">
               <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Room for food service will be reserved. Please request food from Nawras HR &gt; Self Service &gt; Food Service.
+                {t("Room for food service will be reserved. Please request food from Obeikan Knowledge Academy HR > Self Service > Food Service.")}
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Food service room or location *</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">{t("Food service room or location")} *</label>
                 <Input
                   required={form.foodServiceRequired === true}
                   value={form.foodServiceLocation}
-                  placeholder="Example: Dining Room 2 or Level 1 Lounge"
+                  placeholder={t("Example: Dining Room 2 or Level 1 Lounge")}
                   onChange={(event) => setForm({ ...form, foodServiceLocation: event.target.value })}
                 />
               </div>
             </div>
           ) : (
             <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
-              Select whether food service is required for this booking.
+              {t("Select whether food service is required for this booking.")}
             </div>
           )}
         </div>
@@ -356,25 +455,25 @@ export function BookingForm({
               checked={Boolean(form.overrideCapacity)}
               onChange={(event) => setForm({ ...form, overrideCapacity: event.target.checked })}
             />
-            Allow attendee count to exceed room capacity
+            {t("Allow attendee count to exceed room capacity")}
           </label>
         ) : null}
 
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-700">Note</label>
+          <label className="mb-2 block text-sm font-medium text-slate-700">{t("Note")}</label>
           <Textarea value={form.remarks} onChange={(event) => setForm({ ...form, remarks: event.target.value })} />
         </div>
 
         <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
           {adminManaged
-            ? "Admin bookings are saved directly as confirmed reservations."
-            : "Staff bookings are submitted as pending requests."}
+            ? t("Admin bookings are saved directly as confirmed reservations.")
+            : t("Staff bookings are submitted to the assigned manager first, then forwarded to admin after manager approval.")}
         </div>
 
         {error ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
         {conflicts.length > 0 ? (
           <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <p className="font-semibold">Conflicting confirmed bookings</p>
+            <p className="font-semibold">{t("Conflicting confirmed bookings")}</p>
             <ul className="mt-2 space-y-1">
               {conflicts.map((item) => (
                 <li key={item.id}>
@@ -387,7 +486,7 @@ export function BookingForm({
 
         <div className="flex flex-wrap justify-end gap-3">
           <Button type="submit" disabled={saving}>
-            {saving ? "Saving..." : reservation ? "Save changes" : "Create booking"}
+            {saving ? t("Saving...") : reservation ? t("Save changes") : t("Create booking")}
           </Button>
         </div>
       </form>

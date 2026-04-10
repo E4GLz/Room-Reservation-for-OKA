@@ -24,6 +24,7 @@ Internal room reservation system for meetings, workshops, training sessions, and
 - Admin booking settings for blocked days and workweek configuration
 - SMTP-based email sending for upcoming admin meeting reminders
 - User administration with account creation, role assignment, and status control
+- Manager-based approval step for staff booking requests before admin confirmation
 - Reservation audit trail
 - Real reminder email dispatch for upcoming meetings plus API notification payloads
 
@@ -51,6 +52,8 @@ Internal room reservation system for meetings, workshops, training sessions, and
 - `POST /api/reservations`
 - `GET /api/reservations/:id`
 - `PUT /api/reservations/:id`
+- `GET /api/manager-approvals`
+- `POST /api/reservations/:id/manager-approval`
 - `POST /api/reservations/:id/cancel`
 - `GET /api/reservations/conflicts`
 - `GET /api/dashboard`
@@ -166,6 +169,7 @@ npm run dev
 
 - `Admin`: full access to rooms, users, settings, booking creation, editing, cancellation, reports, and reminder sending
 - `Staff` (stored internally as `STANDARD` for compatibility): planner access, personal dashboard summary, and personal booking history only
+- staff-created booking requests now move through manager approval first, then continue to admin for final confirmation
 - staff users do not see rooms, reports, users, settings, or booking creation actions in the UI
 
 ## Go-Live Warning
@@ -181,6 +185,8 @@ npm run dev
 - attendee count cannot exceed room capacity unless admin override is set
 - conflicts are detected when reservations share the same room, date, and overlapping time range
 - blocked dates configured in Booking Settings cannot be booked
+- staff booking requests require an assigned manager before they can be submitted
+- manager approval is required before admin confirmation for staff-created requests
 - cancelled reservations are retained instead of deleted
 
 ## Environment
@@ -198,9 +204,9 @@ SMTP_FROM="Room Reservation Platform <notifications@your-company.com>"
 ## Email Reminders
 
 - upcoming admin meeting reminders can be configured from `/settings`
-- the dashboard includes an `Admin reminder queue` card with a `Send reminder emails` action
-- reminder emails are sent to all active admin user email addresses
-- each reservation reminder is marked in the audit trail after sending so repeated clicks do not resend the same reminder
+- reminder emails are sent automatically to all active admin user email addresses through the scheduled `/api/notifications/upcoming-reminders` route
+- `vercel.json` runs the reminder job every hour and the route can be protected with `CRON_SECRET`
+- each reservation reminder is marked in the audit trail after sending so repeated runs do not resend the same reminder
 
 ## Current Limitation In This Workspace
 

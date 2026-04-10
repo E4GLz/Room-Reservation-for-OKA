@@ -5,25 +5,27 @@ import { createAuditEntry } from "@/lib/reservations";
 import { formatLongDate } from "@/lib/utils";
 import { isEmailConfigured, sendEmail } from "@/lib/email";
 
-export async function POST() {
+async function runUpcomingReminderDispatch() {
   if (!isEmailConfigured()) {
-    return NextResponse.json(
-      {
+    return {
+      ok: false as const,
+      status: 400,
+      body: {
         error: "SMTP is not configured. Add SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM to your environment."
-      },
-      { status: 400 }
-    );
+      }
+    };
   }
 
   const data = await getDashboardData();
 
   if (data.adminReminderConfig.recipientEmails.length === 0) {
-    return NextResponse.json(
-      {
+    return {
+      ok: false as const,
+      status: 400,
+      body: {
         error: "No active admin email addresses are available to receive reminders."
-      },
-      { status: 400 }
-    );
+      }
+    };
   }
 
   let sentCount = 0;
@@ -94,10 +96,31 @@ export async function POST() {
     sentCount += 1;
   }
 
-  return NextResponse.json({
-    sentCount,
-    skippedCount,
-    totalQueued: data.upcomingAdminReminders.length,
-    recipientEmails: data.adminReminderConfig.recipientEmails
-  });
+  return {
+    ok: true as const,
+    status: 200,
+    body: {
+      sentCount,
+      skippedCount,
+      totalQueued: data.upcomingAdminReminders.length,
+      recipientEmails: data.adminReminderConfig.recipientEmails
+    }
+  };
+}
+
+export async function GET(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization");
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const result = await runUpcomingReminderDispatch();
+  return NextResponse.json(result.body, { status: result.status });
+}
+
+export async function POST() {
+  const result = await runUpcomingReminderDispatch();
+  return NextResponse.json(result.body, { status: result.status });
 }

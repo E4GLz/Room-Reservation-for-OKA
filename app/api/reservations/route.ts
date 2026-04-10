@@ -5,7 +5,9 @@ import {
   buildNotification,
   buildReservationWriteData,
   createAuditEntry,
+  getManagerApprovalDefaults,
   isLegacyReservationSchemaError,
+  sendManagerApprovalRequestEmail,
   serializeReservation,
   validateReservationBusinessRules
 } from "@/lib/reservations";
@@ -121,7 +123,11 @@ export async function POST(request: Request) {
     reservation = await prisma.reservation.create({
       data: {
         reservationCode: `RSV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`,
-        ...buildReservationWriteData(parsed.data)
+        ...buildReservationWriteData(parsed.data),
+        ...getManagerApprovalDefaults({
+          createdByRole: parsed.data.createdByRole,
+          managerId: validation.manager?.id
+        })
       },
       include: {
         room: true,
@@ -161,6 +167,27 @@ export async function POST(request: Request) {
   });
 
   const serializedFresh = serializeReservation(fresh);
+
+  if (parsed.data.createdByRole === "STANDARD" && validation.manager) {
+    await createAuditEntry({
+      reservationId: reservation.id,
+      action: "MANAGER_APPROVAL_REQUESTED",
+      actorName: parsed.data.requesterName,
+      actorEmail: parsed.data.requesterEmail,
+      actorRole: parsed.data.createdByRole,
+      notes: `Submitted to manager ${validation.manager.name} for approval.`,
+      snapshot: reservation
+    });
+
+    try {
+      await sendManagerApprovalRequestEmail({
+        reservation: serializedFresh,
+        manager: validation.manager
+      });
+    } catch {
+      // Do not fail reservation creation if email delivery is unavailable.
+    }
+  }
 
   return NextResponse.json(
     {

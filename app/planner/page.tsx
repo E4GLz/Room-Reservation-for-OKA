@@ -2,12 +2,13 @@ import { PlannerPage } from "@/components/planner/planner-page";
 import { prisma } from "@/lib/prisma";
 import { serializeReservation } from "@/lib/reservations";
 import { getAppSettings } from "@/lib/settings";
-import { serializeSettings } from "@/lib/utils";
+import { serializeSettings, toDateKey } from "@/lib/utils";
 import type { FilterState, PlannerView } from "@/lib/types";
 
 async function getRooms() {
   const rooms = await prisma.room.findMany({
-    orderBy: [{ status: "asc" }, { code: "asc" }]
+    where: { status: "ACTIVE" },
+    orderBy: [{ code: "asc" }]
   });
 
   return rooms.map((room) => ({
@@ -33,16 +34,44 @@ async function getReservations() {
   );
 }
 
+async function getReservationHistorySummary() {
+  const [earliestReservation, latestReservation, totalReservations] = await Promise.all([
+    prisma.reservation.findFirst({
+      orderBy: { reservationDate: "asc" },
+      select: { reservationDate: true }
+    }),
+    prisma.reservation.findFirst({
+      orderBy: { reservationDate: "desc" },
+      select: { reservationDate: true }
+    }),
+    prisma.reservation.count()
+  ]);
+
+  return {
+    totalReservations,
+    earliestDate: earliestReservation ? toDateKey(earliestReservation.reservationDate) : null,
+    latestDate: latestReservation ? toDateKey(latestReservation.reservationDate) : null
+  };
+}
+
 export default async function Planner({
   searchParams
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const resolvedSearchParams = searchParams ? await searchParams : {};
-  const [rooms, reservations, settings] = await Promise.all([getRooms(), getReservations(), getAppSettings()]);
+  const [rooms, reservations, settings, historySummary] = await Promise.all([
+    getRooms(),
+    getReservations(),
+    getAppSettings(),
+    getReservationHistorySummary()
+  ]);
   const viewParam = Array.isArray(resolvedSearchParams.view) ? resolvedSearchParams.view[0] : resolvedSearchParams.view;
+  const dateParam = Array.isArray(resolvedSearchParams.date) ? resolvedSearchParams.date[0] : resolvedSearchParams.date;
   const allowedViews: PlannerView[] = ["month", "week", "day", "list"];
   const initialView = allowedViews.includes(viewParam as PlannerView) ? (viewParam as PlannerView) : "month";
+  const initialDate =
+    typeof dateParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : historySummary.latestDate ?? undefined;
   const initialFilters: FilterState = {
     roomId: Array.isArray(resolvedSearchParams.roomId) ? resolvedSearchParams.roomId[0] ?? "" : resolvedSearchParams.roomId ?? "",
     eventType: Array.isArray(resolvedSearchParams.eventType) ? resolvedSearchParams.eventType[0] ?? "" : resolvedSearchParams.eventType ?? "",
@@ -56,7 +85,9 @@ export default async function Planner({
       reservations={reservations}
       settings={serializeSettings(settings)}
       initialView={initialView}
+      initialDate={initialDate}
       initialFilters={initialFilters}
+      historySummary={historySummary}
     />
   );
 }

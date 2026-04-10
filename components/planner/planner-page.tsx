@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { CalendarPlus2, ChevronLeft, ChevronRight } from "lucide-react";
+import { useLanguage } from "@/components/providers/language-provider";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PlannerFilters } from "@/components/planner/planner-filters";
@@ -34,16 +36,26 @@ export function PlannerPage({
   rooms,
   settings,
   initialView = "month",
-  initialFilters
+  initialDate,
+  initialFilters,
+  historySummary
 }: {
   reservations: ReservationRecord[];
   rooms: RoomRecord[];
   settings: AppSettingsRecord;
   initialView?: PlannerView;
+  initialDate?: string;
   initialFilters?: FilterState;
+  historySummary: {
+    totalReservations: number;
+    earliestDate: string | null;
+    latestDate: string | null;
+  };
 }) {
+  const router = useRouter();
+  const { t } = useLanguage();
   const [view, setView] = useState<PlannerView>(initialView);
-  const [baseDate, setBaseDate] = useState<Date>(new Date());
+  const [baseDate, setBaseDate] = useState<Date>(initialDate ? fromInputDate(initialDate) : new Date());
   const [filters, setFilters] = useState<FilterState>(
     initialFilters ?? {
       roomId: "",
@@ -71,6 +83,21 @@ export function PlannerPage({
     () => rooms.filter((room) => !filters.roomId || room.id === filters.roomId),
     [filters.roomId, rooms]
   );
+  const showHistoryCard =
+    historySummary.totalReservations > 0 &&
+    historySummary.earliestDate &&
+    historySummary.latestDate &&
+    historySummary.earliestDate !== historySummary.latestDate;
+
+  function jumpToDate(value: string | null) {
+    if (!value) {
+      return;
+    }
+
+    const nextDate = fromInputDate(value);
+    setBaseDate(nextDate);
+    router.replace(`/planner?date=${value}&view=${view}`);
+  }
 
   return (
     <div className="pb-8">
@@ -83,7 +110,7 @@ export function PlannerPage({
             <Link href="/bookings/new">
               <Button>
                 <CalendarPlus2 className="mr-2 h-4 w-4" />
-                Create booking
+                {t("Create booking")}
               </Button>
             </Link>
           </>
@@ -91,6 +118,29 @@ export function PlannerPage({
       />
 
       <div className="space-y-6 px-8 py-6">
+        {showHistoryCard ? (
+          <Card className="bg-[linear-gradient(135deg,rgba(240,247,255,0.96),rgba(255,255,255,0.98))]">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">{t("Historical data available")}</p>
+                <h3 className="mt-2 text-xl font-semibold text-slate-950">{t("Imported reservations are in the planner")}</h3>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+                  {t("This planner contains")} {historySummary.totalReservations.toLocaleString()} {t("reservations from")}{" "}
+                  {formatLongDate(historySummary.earliestDate)} to {formatLongDate(historySummary.latestDate)}.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => jumpToDate(historySummary.earliestDate)}>
+                  {t("Jump to earliest booking")}
+                </Button>
+                <Button variant="ghost" onClick={() => jumpToDate(historySummary.latestDate)}>
+                  {t("Return to latest booking")}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        ) : null}
+
         <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(237,243,255,0.82))]">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3">
@@ -101,7 +151,7 @@ export function PlannerPage({
                 <p className="text-lg font-semibold text-slate-950">{formatMonthLabel(baseDate)}</p>
                 <p className="text-sm text-slate-500">
                   {formatLongDate(visibleDates[0])}
-                  {" to "}
+                  {` ${t("to")} `}
                   {formatLongDate(visibleDates[visibleDates.length - 1])}
                 </p>
               </div>
@@ -112,7 +162,7 @@ export function PlannerPage({
                 type="date"
                 className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
                 value={toInputDate(baseDate)}
-                onChange={(event) => setBaseDate(fromInputDate(event.target.value))}
+                onChange={(event) => jumpToDate(event.target.value)}
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -120,9 +170,12 @@ export function PlannerPage({
                 <Button
                   key={item.value}
                   variant={item.value === view ? "primary" : "ghost"}
-                  onClick={() => setView(item.value)}
+                  onClick={() => {
+                    setView(item.value);
+                    router.replace(`/planner?date=${toInputDate(baseDate)}&view=${item.value}`);
+                  }}
                 >
-                  {item.label}
+                  {t(item.label)}
                 </Button>
               ))}
             </div>

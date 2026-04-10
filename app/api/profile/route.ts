@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hashPassword, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validateUniqueUserIdentity } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { profileSchema } from "@/lib/validation";
 
@@ -29,12 +30,22 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Current password is incorrect." }, { status: 400 });
   }
 
+  const uniqueness = await validateUniqueUserIdentity({
+    email: parsed.data.email,
+    phoneNumber: parsed.data.phoneNumber,
+    excludeUserId: id
+  });
+
+  if (!uniqueness.ok) {
+    return NextResponse.json({ error: uniqueness.message }, { status: 400 });
+  }
+
   const updated = await prisma.user.update({
     where: { id },
     data: {
       name: parsed.data.name,
-      email: parsed.data.email,
-      phoneNumber: parsed.data.phoneNumber || null,
+      email: uniqueness.email,
+      phoneNumber: uniqueness.phoneNumber,
       ...(parsed.data.newPassword ? { passwordHash: hashPassword(parsed.data.newPassword) } : {})
     }
   });

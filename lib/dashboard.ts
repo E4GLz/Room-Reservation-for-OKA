@@ -1,6 +1,7 @@
 import { BookingStatus, type Reservation, type Room } from "@prisma/client";
 import {
   addDays,
+  addMonths,
   eachDayOfInterval,
   endOfDay,
   endOfMonth,
@@ -8,12 +9,16 @@ import {
   differenceInMinutes,
   startOfDay,
   startOfMonth,
+  startOfYear,
+  max as maxDate,
+  min as minDate,
   subMonths
 } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { serializeReservation } from "@/lib/reservations";
 import { getAppSettings } from "@/lib/settings";
 import type { DashboardPayload } from "@/lib/types";
+import { getWorkWeekDays } from "@/lib/utils";
 
 type ReservationWithRoom = Reservation & { room: Room };
 
@@ -92,6 +97,7 @@ async function getDashboardQueries(params: {
         : {
             bookingStatus: BookingStatus.PENDING,
             createdByRole: "STANDARD",
+            managerApprovalStatus: "APPROVED",
             reservationEndDate: {
               gte: todayStart
             }
@@ -123,6 +129,67 @@ function getReservationStartDateTime(reservation: ReservationWithRoom & Record<s
     0,
     0
   );
+}
+
+function getReservationOccupiedHours(reservation: ReservationWithRoom & Record<string, unknown>) {
+  const startMinutes = reservation.startTime
+    .split(":")
+    .map(Number)
+    .reduce((total, value, index) => total + value * (index === 0 ? 60 : 1), 0);
+  const endMinutes = reservation.endTime
+    .split(":")
+    .map(Number)
+    .reduce((total, value, index) => total + value * (index === 0 ? 60 : 1), 0);
+  const dailyMinutes = Math.max(endMinutes - startMinutes, 0);
+  const dayCount = eachDayOfInterval({
+    start: reservation.reservationDate,
+    end: getReservationEndDateCompat(reservation)
+  }).length;
+
+  return Number(((dailyMinutes / 60) * dayCount).toFixed(1));
+}
+
+function buildMonthlySeries<T>(
+  reservations: Array<ReservationWithRoom & Record<string, unknown>>,
+  valueSelector: (reservation: ReservationWithRoom & Record<string, unknown>) => number
+) {
+  if (reservations.length === 0) {
+    return [];
+  }
+
+  const earliestReservationDate = minDate(reservations.map((reservation) => reservation.reservationDate));
+  const latestReservationDate = maxDate(reservations.map((reservation) => getReservationEndDateCompat(reservation)));
+  const series: Array<{ label: string; shortLabel: string; year: number; month: number; total: number }> = [];
+
+  let cursor = startOfMonth(earliestReservationDate);
+  const end = startOfMonth(latestReservationDate);
+
+  while (cursor <= end) {
+    const year = cursor.getFullYear();
+    const month = cursor.getMonth() + 1;
+    const total = Number(
+      reservations
+        .filter(
+          (reservation) =>
+            reservation.reservationDate.getFullYear() === year &&
+            reservation.reservationDate.getMonth() + 1 === month
+        )
+        .reduce((sum, reservation) => sum + valueSelector(reservation), 0)
+        .toFixed(1)
+    );
+
+    series.push({
+      label: format(cursor, "MMMM yyyy"),
+      shortLabel: format(cursor, "MMM"),
+      year,
+      month,
+      total
+    });
+
+    cursor = addMonths(cursor, 1);
+  }
+
+  return series;
 }
 
 export async function getDashboardData(): Promise<DashboardPayload> {
@@ -161,20 +228,34 @@ export async function getDashboardData(): Promise<DashboardPayload> {
   const [thisMonthReservations, rooms, upcomingReservations, allReservations, pendingApprovals, adminUsers, settings] = queryResults;
 
   const activeThisMonth = thisMonthReservations.filter((item) => item.bookingStatus !== BookingStatus.CANCELLED);
+  const activeAllTime = allReservations.filter((item) => item.bookingStatus !== BookingStatus.CANCELLED);
   const confirmedThisMonth = activeThisMonth.filter((item) => item.bookingStatus === BookingStatus.CONFIRMED);
   const pendingThisMonth = activeThisMonth.filter((item) => item.bookingStatus === BookingStatus.PENDING);
   const adminCreatedThisMonth = activeThisMonth.filter((item) => item.createdByRole === "ADMIN");
   const standardRequestedThisMonth = activeThisMonth.filter((item) => item.createdByRole === "STANDARD");
   const reminderHours = settings?.upcomingReminderHours ?? 24;
   const reminderRecipientEmails = adminUsers.map((user) => user.email);
+  const latestReservationDate =
+    activeAllTime.length > 0
+      ? maxDate(activeAllTime.map((reservation) => getReservationEndDateCompat(reservation as ReservationWithRoom & Record<string, unknown>)))
+      : today;
 
   const bookingsByRoom = rooms.map((room) => ({
     name: room.name,
-    total: activeThisMonth.filter((reservation) => reservation.roomId === room.id).length
+    total: activeAllTime.filter((reservation) => reservation.roomId === room.id).length
+  }));
+  const occupiedHoursByRoom = rooms.map((room) => ({
+    name: room.name,
+    hours: Number(
+      activeAllTime
+        .filter((reservation) => reservation.roomId === room.id)
+        .reduce((sum, reservation) => sum + getReservationOccupiedHours(reservation as ReservationWithRoom & Record<string, unknown>), 0)
+        .toFixed(1)
+    )
   }));
 
   const eventTypeMap = new Map<string, number>();
-  activeThisMonth.forEach((reservation) => {
+  activeAllTime.forEach((reservation) => {
     eventTypeMap.set(reservation.eventType, (eventTypeMap.get(reservation.eventType) ?? 0) + 1);
   });
 
@@ -220,7 +301,7 @@ export async function getDashboardData(): Promise<DashboardPayload> {
   const highestUtilizationRoom = [...utilizationByRoom].sort((a, b) => b.utilization - a.utilization)[0];
 
   const busiestDaysMap = new Map<string, number>();
-  activeThisMonth.forEach((reservation) => {
+  activeAllTime.forEach((reservation) => {
     eachDayOfInterval({
       start: reservation.reservationDate,
       end: getReservationEndDateCompat(reservation as ReservationWithRoom & Record<string, unknown>)
@@ -239,15 +320,19 @@ export async function getDashboardData(): Promise<DashboardPayload> {
     .sort((a, b) => b.total - a.total)
     .slice(0, 5);
 
-  const weekdayOrder = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const workWeekDayIndexes = getWorkWeekDays(settings.workWeekStart, settings.workWeekEnd);
+  const weekdayOrder = workWeekDayIndexes.map((dayIndex) => weekdayLabels[dayIndex]);
   const weekdayMap = new Map(weekdayOrder.map((day) => [day, 0]));
-  activeThisMonth.forEach((reservation) => {
+  activeAllTime.forEach((reservation) => {
     eachDayOfInterval({
       start: reservation.reservationDate,
       end: getReservationEndDateCompat(reservation as ReservationWithRoom & Record<string, unknown>)
     }).forEach((date) => {
       const key = format(date, "EEE");
-      weekdayMap.set(key, (weekdayMap.get(key) ?? 0) + 1);
+      if (weekdayMap.has(key)) {
+        weekdayMap.set(key, (weekdayMap.get(key) ?? 0) + 1);
+      }
     });
   });
 
@@ -307,6 +392,11 @@ export async function getDashboardData(): Promise<DashboardPayload> {
       confirmedThisMonth: confirmedThisMonth.length,
       pendingThisMonth: pendingThisMonth.length,
       cancelledThisMonth: thisMonthReservations.filter((item) => item.bookingStatus === BookingStatus.CANCELLED).length,
+      occupiedHoursThisMonth: Number(
+        activeThisMonth
+          .reduce((sum, reservation) => sum + getReservationOccupiedHours(reservation as ReservationWithRoom & Record<string, unknown>), 0)
+          .toFixed(1)
+      ),
       adminCreatedThisMonth: adminCreatedThisMonth.length,
       standardRequestedThisMonth: standardRequestedThisMonth.length,
       todayCount: upcomingReservations.filter((item) => item.reservationDate <= todayEnd && getReservationEndDateCompat(item as ReservationWithRoom & Record<string, unknown>) >= todayStart).length,
@@ -321,6 +411,7 @@ export async function getDashboardData(): Promise<DashboardPayload> {
       leastUsedRoom: sortedByUtilization[0] ?? { name: "No data", utilization: 0 }
     },
     bookingsByRoom,
+    occupiedHoursByRoom,
     bookingsByEventType: Array.from(eventTypeMap.entries()).map(([type, total]) => ({ type, total })),
     utilizationByRoom,
     busiestDays,
@@ -349,17 +440,16 @@ export async function getDashboardData(): Promise<DashboardPayload> {
         auditEntries: []
       } as ReservationWithRoom & { auditEntries: [] })
     ),
-    monthlyTrend: Array.from({ length: 6 }).map((_, index) => {
-      const target = subMonths(today, 5 - index);
-      return {
-        label: format(target, "MMM"),
-        total: allReservations.filter(
-          (reservation) =>
-            reservation.reservationDate.getMonth() === target.getMonth() &&
-            reservation.reservationDate.getFullYear() === target.getFullYear() &&
-            reservation.bookingStatus !== BookingStatus.CANCELLED
-        ).length
-      };
-    })
+    monthlyTrend: buildMonthlySeries(activeAllTime as Array<ReservationWithRoom & Record<string, unknown>>, () => 1),
+    occupiedHoursTrend: buildMonthlySeries(
+      activeAllTime as Array<ReservationWithRoom & Record<string, unknown>>,
+      (reservation) => getReservationOccupiedHours(reservation)
+    ).map((item) => ({
+      label: item.label,
+      shortLabel: item.shortLabel,
+      year: item.year,
+      month: item.month,
+      hours: item.total
+    }))
   };
 }

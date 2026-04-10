@@ -39,6 +39,27 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
+  const existing = await prisma.reservation.findUnique({
+    where: { id }
+  });
+
+  if (!existing) {
+    return NextResponse.json({ error: "Reservation not found." }, { status: 404 });
+  }
+
+  if (
+    existing.createdByRole === "STANDARD" &&
+    existing.bookingStatus === BookingStatus.PENDING &&
+    "managerApprovalStatus" in existing &&
+    existing.managerApprovalStatus === "PENDING" &&
+    parsed.data.bookingStatus === BookingStatus.CONFIRMED
+  ) {
+    return NextResponse.json(
+      { error: "This request still requires manager approval before admin confirmation." },
+      { status: 400 }
+    );
+  }
+
   const validation = await validateReservationBusinessRules(parsed.data, id);
   if (!validation.ok) {
     return NextResponse.json(

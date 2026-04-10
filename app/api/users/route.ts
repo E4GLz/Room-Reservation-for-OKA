@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { validateUniqueUserIdentity } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { userSchema } from "@/lib/validation";
 
 export async function GET() {
   const users = await prisma.user.findMany({
+    include: {
+      manager: true
+    },
     orderBy: [{ role: "asc" }, { name: "asc" }]
   });
 
@@ -24,11 +28,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: { formErrors: ["Password is required for new users."] } }, { status: 400 });
   }
 
+  const uniqueness = await validateUniqueUserIdentity({
+    email: parsed.data.email,
+    phoneNumber: parsed.data.phoneNumber
+  });
+
+  if (!uniqueness.ok) {
+    return NextResponse.json({ error: { formErrors: [uniqueness.message] } }, { status: 400 });
+  }
+
   const user = await prisma.user.create({
     data: {
       name: parsed.data.name,
-      email: parsed.data.email,
-      phoneNumber: parsed.data.phoneNumber || null,
+      email: uniqueness.email,
+      phoneNumber: uniqueness.phoneNumber,
+      managerId: parsed.data.role === "ADMIN" ? null : parsed.data.managerId || null,
       passwordHash: hashPassword(parsed.data.password),
       role: parsed.data.role,
       status: parsed.data.status

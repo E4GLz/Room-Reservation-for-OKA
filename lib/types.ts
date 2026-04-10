@@ -1,10 +1,22 @@
-import type { AppSettings, BlockedDay, BookingStatus, Room, RoomStatus, UserRole, UserStatus } from "@prisma/client";
+import type {
+  AppSettings,
+  BlockedDay,
+  BookingStatus,
+  ManagerApprovalStatus,
+  Room,
+  RoomStatus,
+  UserRole,
+  UserStatus
+} from "@prisma/client";
 
 export type AppUser = {
   id: string;
   name: string;
   email: string;
   phoneNumber: string | null;
+  managerId?: string | null;
+  managerName?: string | null;
+  managerEmail?: string | null;
   role: UserRole;
   status: UserStatus;
 };
@@ -58,6 +70,11 @@ export type ReservationRecord = {
   attendeesCount: number;
   remarks: string | null;
   bookingStatus: BookingStatus;
+  managerId: string | null;
+  managerApprovalStatus: ManagerApprovalStatus;
+  managerReviewedAt: string | null;
+  managerReviewerName: string | null;
+  managerReviewerEmail: string | null;
   createdByRole: UserRole;
   overrideCapacity: boolean;
   cancelledAt: string | null;
@@ -83,6 +100,7 @@ export type DashboardPayload = {
     confirmedThisMonth: number;
     pendingThisMonth: number;
     cancelledThisMonth: number;
+    occupiedHoursThisMonth: number;
     adminCreatedThisMonth: number;
     standardRequestedThisMonth: number;
     todayCount: number;
@@ -97,6 +115,7 @@ export type DashboardPayload = {
     leastUsedRoom: { name: string; utilization: number };
   };
   bookingsByRoom: Array<{ name: string; total: number }>;
+  occupiedHoursByRoom: Array<{ name: string; hours: number }>;
   bookingsByEventType: Array<{ type: string; total: number }>;
   utilizationByRoom: Array<{ name: string; utilization: number }>;
   busiestDays: Array<{ date: string; label: string; total: number }>;
@@ -127,19 +146,23 @@ export type DashboardPayload = {
     reservation: ReservationRecord;
     startsInHours: number;
   }>;
-  monthlyTrend: Array<{ label: string; total: number }>;
+  monthlyTrend: Array<{ label: string; shortLabel: string; year: number; month: number; total: number }>;
+  occupiedHoursTrend: Array<{ label: string; shortLabel: string; year: number; month: number; hours: number }>;
 };
 
 export type ReportsPayload = {
   activeRooms: number;
   averageAttendees: number;
   totalBookings: number;
+  occupiedHours: number;
   cancellationRate: number;
   foodServiceCount: number;
   topCompanies: Array<{ company: string; total: number }>;
   reservationTypeMix: Array<{ type: string; total: number }>;
   roomTypeMix: Array<{ type: string; total: number }>;
-  monthlyTrend: Array<{ label: string; total: number }>;
+  monthlyTrend: Array<{ label: string; shortLabel: string; year: number; month: number; total: number }>;
+  occupiedHoursByRoom: Array<{ name: string; hours: number }>;
+  occupiedHoursTrend: Array<{ label: string; shortLabel: string; year: number; month: number; hours: number }>;
 };
 
 export type ReservationInput = {
@@ -211,6 +234,7 @@ export type UserFormValues = {
   email: string;
   phoneNumber?: string;
   password?: string;
+  managerId?: string;
   role: UserRole;
   status: UserStatus;
 };
@@ -225,6 +249,7 @@ export type ProfileFormValues = {
 
 export type SettingsFormValues = {
   siteTitle: string;
+  siteTitleArabic?: string;
   siteDescription: string;
   workWeekStart: number;
   workWeekEnd: number;

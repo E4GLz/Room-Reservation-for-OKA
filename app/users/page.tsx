@@ -5,6 +5,9 @@ import { serializeUser } from "@/lib/utils";
 
 export default async function Users() {
   const users = await prisma.user.findMany({
+    include: {
+      manager: true
+    },
     orderBy: [{ role: "asc" }, { name: "asc" }]
   });
 
