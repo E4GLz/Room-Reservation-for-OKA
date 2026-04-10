@@ -53,8 +53,8 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:backend-v${{ steps.version.outputs.VERSION }} --no-cache .
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:backend-v${{ steps.version.outputs.VERSION }}
+          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:${{ steps.version.outputs.VERSION }} --no-cache .
+          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:${{ steps.version.outputs.VERSION }}
 
       - name: Copy .env to VM
         uses: appleboy/scp-action@v0.1.4
@@ -74,5 +74,5 @@ jobs:
           script: |
             cd deployment/
             docker compose -f docker-compose.yaml down
-            sed -i '/^  app:/{n;s|image: .*$|image: ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:backend-v${{ steps.version.outputs.VERSION }}|}' docker-compose.yaml
+            sed -i '/^  app:/{n;s|image: .*$|image: ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:${{ steps.version.outputs.VERSION }}|}' docker-compose.yaml
             docker compose -f docker-compose.yaml up -d
