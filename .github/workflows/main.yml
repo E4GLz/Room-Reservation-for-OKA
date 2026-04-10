@@ -64,8 +64,13 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:app-v${{ steps.version.outputs.VERSION }} --no-cache .
-          docker push ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:app-v:${{ steps.version.outputs.VERSION }}
+          USERNAME=$(echo "${{ secrets.DOCKER_HUB_USERNAME }}" | tr -d '[:space:]')
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          docker build \
+            --build-arg DATABASE_URL=${{ secrets.DATABASE_URL }} \
+            -t $USERNAME/app:backend-v$VERSION \
+            --no-cache .
+          docker push $USERNAME/app:backend-v$VERSION
 
       - name: Copy .env to VM
         uses: appleboy/scp-action@v0.1.4
