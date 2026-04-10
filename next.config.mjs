@@ -2,8 +2,12 @@
 const nextConfig = {
   output: "standalone",
   typedRoutes: true,
-  // Disable static generation entirely
   generateStaticParams: false,
+  // Force all pages to be dynamic globally
+  experimental: {
+    ppr: false,
+  },
+  staticPageGenerationTimeout: 1,
 };
 
 export default nextConfig;
