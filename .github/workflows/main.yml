@@ -1,0 +1,99 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - deployment
+permissions:
+  contents: write 
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest # OS that handles pipeline steps
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Required to fetch all tags
+          token: ${{ secrets.GITHUB_TOKEN }} 
+          persist-credentials: true   
+
+      - name: Bump version from last tag
+        id: version
+        run: |
+          LAST_TAG=$(git tag --sort=-v:refname | head -n 1)
+          
+          if [ -z "$LAST_TAG" ]; then
+            NEW_VERSION="1.100"
+          else
+            MAJOR=$(echo $LAST_TAG | tr -d 'v' | cut -d. -f1)
+            MINOR=$(echo $LAST_TAG | tr -d 'v' | cut -d. -f2)
+            NEW_MINOR=$((MINOR + 1))
+            NEW_VERSION="$MAJOR.$NEW_MINOR"
+          fi
+          
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Git tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git tag v${{ steps.version.outputs.VERSION }}
+          git push origin v${{ steps.version.outputs.VERSION }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Docker Hub
+        run: docker login -u ${{ secrets.DOCKER_HUB_USERNAME }} -p ${{ secrets.DOCKER_HUB_PASSWORD }}
+
+      - name: Create .env file
+        run: |
+          cat > .env << EOF
+          DATABASE_URL="${{ secrets.DATABASE_URL }}"
+          POSTGRES_USER="${{ secrets.POSTGRES_USER }}"
+          POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+          POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+          SMTP_HOST="${{ secrets.SMTP_HOST }}"
+          SMTP_PORT="${{ secrets.SMTP_PORT }}"
+          SMTP_SECURE="${{ secrets.SMTP_SECURE }}"
+          SMTP_USER="${{ secrets.SMTP_USER }}"
+          SMTP_PASS="${{ secrets.SMTP_PASS }}"
+          SMTP_FROM="${{ secrets.SMTP_FROM }}"
+          ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}"
+          ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}"
+          EOF
+
+      - name: Build and push Docker image
+        run: |
+          USERNAME=$(echo "${{ secrets.DOCKER_HUB_USERNAME }}" | tr -d '[:space:]')
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          docker build \
+            --build-arg DATABASE_URL=${{ secrets.DATABASE_URL }} \
+            -t $USERNAME/roombooking:app-v$VERSION \
+            --no-cache .
+          docker push $USERNAME/roombooking:app-v$VERSION
+
+      - name: Copy .env to VM
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          source: ".env"
+          target: "deployment/"
+
+      - name: Deploy Application
+        uses: appleboy/ssh-action@v0.1.8
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_PRIVATE_KEY }}
+          script: |
+            USERNAME=$(echo "${{ secrets.DOCKER_HUB_USERNAME }}" | tr -d '[:space:]')
+            VERSION="${{ steps.version.outputs.VERSION }}"
+            cd deployment/
+            docker compose -f docker-compose.yaml down
+            sed -i '/^  app:/{n;s|image: .*$|image: ${{ secrets.DOCKER_HUB_USERNAME }}/roombooking:app-v${{ steps.version.outputs.VERSION }}|}' docker-compose.yaml
+            docker compose -f docker-compose.yaml up -d

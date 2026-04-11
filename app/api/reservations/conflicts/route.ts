@@ -4,7 +4,7 @@ import { findConflictingReservations, serializeReservation } from "@/lib/reserva
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const roomId = searchParams.get("roomId");
-  const reservationDate = searchParams.get("reservationDate");
+  const reservationDate = searchParams.get("reservationDate") || "";
   const reservationEndDate = searchParams.get("reservationEndDate") || reservationDate;
   const startTime = searchParams.get("startTime");
   const endTime = searchParams.get("endTime");

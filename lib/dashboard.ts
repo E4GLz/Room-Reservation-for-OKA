@@ -19,6 +19,7 @@ import { serializeReservation } from "@/lib/reservations";
 import { getAppSettings } from "@/lib/settings";
 import type { DashboardPayload } from "@/lib/types";
 import { getWorkWeekDays } from "@/lib/utils";
+export const dynamic = 'force-dynamic';
 
 type ReservationWithRoom = Reservation & { room: Room };
 

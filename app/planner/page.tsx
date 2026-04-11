@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { serializeReservation } from "@/lib/reservations";
 import { getAppSettings } from "@/lib/settings";
 import { serializeSettings, toDateKey } from "@/lib/utils";
-import type { FilterState, PlannerView } from "@/lib/types";
+import type { AppSettingsRecord, FilterState, PlannerView } from "@/lib/types";
+import { BookingStatus } from "@prisma/client";
+export const dynamic = 'force-dynamic';
 
 async function getRooms() {
   const rooms = await prisma.room.findMany({
@@ -72,18 +74,22 @@ export default async function Planner({
   const initialView = allowedViews.includes(viewParam as PlannerView) ? (viewParam as PlannerView) : "month";
   const initialDate =
     typeof dateParam === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : historySummary.latestDate ?? undefined;
-  const initialFilters: FilterState = {
-    roomId: Array.isArray(resolvedSearchParams.roomId) ? resolvedSearchParams.roomId[0] ?? "" : resolvedSearchParams.roomId ?? "",
-    eventType: Array.isArray(resolvedSearchParams.eventType) ? resolvedSearchParams.eventType[0] ?? "" : resolvedSearchParams.eventType ?? "",
-    status: Array.isArray(resolvedSearchParams.status) ? resolvedSearchParams.status[0] ?? "" : resolvedSearchParams.status ?? "",
-    search: Array.isArray(resolvedSearchParams.search) ? resolvedSearchParams.search[0] ?? "" : resolvedSearchParams.search ?? ""
-  };
+const rawStatus = Array.isArray(resolvedSearchParams.status)
+  ? resolvedSearchParams.status[0] ?? ""
+  : resolvedSearchParams.status ?? "";
 
+const initialFilters: FilterState = {
+  roomId: Array.isArray(resolvedSearchParams.roomId) ? resolvedSearchParams.roomId[0] ?? "" : resolvedSearchParams.roomId ?? "",
+  eventType: Array.isArray(resolvedSearchParams.eventType) ? resolvedSearchParams.eventType[0] ?? "" : resolvedSearchParams.eventType ?? "",
+  status: (Object.values(BookingStatus).includes(rawStatus as BookingStatus) ? rawStatus : "") as "" | BookingStatus,
+  search: Array.isArray(resolvedSearchParams.search) ? resolvedSearchParams.search[0] ?? "" : resolvedSearchParams.search ?? "",
+};
+const appSetting = serializeSettings(settings) as AppSettingsRecord;
   return (
     <PlannerPage
       rooms={rooms}
       reservations={reservations}
-      settings={serializeSettings(settings)}
+      settings={appSetting}
       initialView={initialView}
       initialDate={initialDate}
       initialFilters={initialFilters}

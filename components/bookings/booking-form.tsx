@@ -37,8 +37,8 @@ function buildInitialState(
 
   return {
     roomId: reservation?.roomId ?? firstMatchingRoom?.id ?? "",
-    reservationDate: reservation ? reservation.reservationDate.slice(0, 10) : toInputDate(new Date()),
-    reservationEndDate: reservation ? reservation.reservationEndDate.slice(0, 10) : toInputDate(new Date()),
+    reservationDate: reservation ? reservation.reservationDate?.toString()?.slice(0, 10) : toInputDate(new Date()),
+    reservationEndDate: reservation ? reservation.reservationEndDate?.toString()?.slice(0, 10) : toInputDate(new Date()),
     startTime: reservation?.startTime ?? "09:00",
     endTime: reservation?.endTime ?? "10:00",
     reservationType: defaultType,

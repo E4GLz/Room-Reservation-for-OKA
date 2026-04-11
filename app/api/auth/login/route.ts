@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { findUserByEmailInsensitive, normalizeEmail } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { loginSchema } from "@/lib/validation";
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   await ensureDefaultAdmin();

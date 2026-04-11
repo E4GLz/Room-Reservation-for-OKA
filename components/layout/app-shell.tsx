@@ -24,15 +24,22 @@ import { cn, toTitleCase } from "@/lib/utils";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
 
-const navigation = [
-  { href: "/login", label: "Login", icon: LogIn },
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/planner", label: "Planner", icon: CalendarRange },
-  { href: "/my-bookings", label: "My Bookings", icon: History, staffOnly: true },
-  { href: "/rooms", label: "Rooms", icon: Building2, adminOnly: true },
-  { href: "/reports", label: "Reports", icon: ClipboardList, adminOnly: true },
-  { href: "/users", label: "Users", icon: UserCog, adminOnly: true },
-  { href: "/settings", label: "Settings", icon: Settings, adminOnly: true }
+
+type NavigationItem = {
+  href: any;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  role: "PUBLIC" | "STANDARD" | "ADMIN";
+};
+const navigation: NavigationItem[] = [
+  { href: "/login", label: "Login", icon: LogIn, role: "PUBLIC" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, role: "PUBLIC" },
+  { href: "/planner", label: "Planner", icon: CalendarRange, role: "PUBLIC" },
+  { href: "/my-bookings", label: "My Bookings", icon: History, role: "STANDARD" },
+  { href: "/rooms", label: "Rooms", icon: Building2, role: "ADMIN" },
+  { href: "/reports", label: "Reports", icon: ClipboardList, role: "ADMIN" },
+  { href: "/users", label: "Users", icon: UserCog, role: "ADMIN" },
+  { href: "/settings", label: "Settings", icon: Settings, role: "ADMIN" }
 ] as const;
 
 export function AppShell({
@@ -62,11 +69,11 @@ export function AppShell({
       return false;
     }
 
-    if (item.adminOnly) {
+    if (item.role === "ADMIN") {
       return user?.role === "ADMIN";
     }
 
-    if (item.staffOnly) {
+    if (item.role === "STANDARD") {
       return user?.role === "STANDARD";
     }
 

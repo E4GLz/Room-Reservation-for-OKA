@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { validateUniqueUserIdentity } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { userSchema } from "@/lib/validation";
+export const dynamic = 'force-dynamic';
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { roomSchema } from "@/lib/validation";
+export const dynamic = 'force-dynamic';
 
 function getRoomErrorMessage(error: unknown) {
   if (
