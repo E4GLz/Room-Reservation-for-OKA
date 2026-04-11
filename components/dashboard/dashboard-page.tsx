@@ -398,7 +398,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                       {reservation.startTime} - {reservation.endTime}
                     </span>
                     <span>{reservation.room.name}</span>
-                    <span>{formatLocalizedDate(reservation.reservationDate, language)}</span>
+                    <span>{formatLocalizedDate(reservation.reservationDate?.toString(), language)}</span>
                     <span>{reservation.attendeesCount} {t("attendees")}</span>
                   </div>
                   <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -732,7 +732,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                         {notification.reservation.startTime} - {notification.reservation.endTime}
                       </span>
                       <span>{notification.reservation.room.name}</span>
-                      <span>{formatLocalizedDate(notification.reservation.reservationDate, language)}</span>
+                      <span>{formatLocalizedDate(notification.reservation.reservationDate?.toString(), language)}</span>
                       <span>{notification.startsInHours}{t("h remaining")}</span>
                     </div>
                     {notification.reservation.foodServiceRequired ? (
@@ -794,7 +794,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                       {reservation.startTime} - {reservation.endTime}
                     </span>
                     <span>{reservation.room.name}</span>
-                    <span>{formatLocalizedDate(reservation.reservationDate, language)}</span>
+                    <span>{formatLocalizedDate(reservation.reservationDate?.toString(), language)}</span>
                   </div>
                   {reservation.foodServiceRequired ? (
                     <div className="mt-3 rounded-[16px] bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">

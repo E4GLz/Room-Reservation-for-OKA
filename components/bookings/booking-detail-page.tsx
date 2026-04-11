@@ -146,6 +146,7 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
 
         {canManageAttachments ? (
           <AttachmentPanel
+            t={t}
             guestLogoAttachments={guestLogoAttachments}
             materialAttachments={materialAttachments}
           />
@@ -222,9 +223,11 @@ function DetailItem({ label, value }: { label: string; value: string }) {
 }
 
 function AttachmentPanel({
+  t,
   guestLogoAttachments,
   materialAttachments
 }: {
+  t: (key: string) => string;
   guestLogoAttachments: Array<{ name: string; url: string }>;
   materialAttachments: Array<{ name: string; url: string }>;
 }) {
@@ -243,8 +246,8 @@ function AttachmentPanel({
         <p className="mt-3 text-sm text-slate-600">{t("No uploaded attachments are available for this booking.")}</p>
       ) : (
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <AttachmentList title={t("Guest company logo")} items={guestLogoAttachments} emptyMessage={t("No logo uploaded.")} />
-          <AttachmentList title={t("Materials to display")} items={materialAttachments} emptyMessage={t("No material files uploaded.")} />
+          <AttachmentList title={t("Guest company logo")} items={guestLogoAttachments} emptyMessage={t("No logo uploaded.")} t={t} />
+          <AttachmentList title={t("Materials to display")} items={materialAttachments} emptyMessage={t("No material files uploaded.")} t={t} />
         </div>
       )}
     </div>
@@ -254,11 +257,13 @@ function AttachmentPanel({
 function AttachmentList({
   title,
   items,
-  emptyMessage
+  emptyMessage,
+  t
 }: {
   title: string;
   items: Array<{ name: string; url: string }>;
   emptyMessage: string;
+  t: (key: string) => string;
 }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">

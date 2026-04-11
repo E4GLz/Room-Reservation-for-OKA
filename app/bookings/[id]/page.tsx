@@ -15,6 +15,9 @@ async function getReservation(id: string) {
       },
     },
   });
+
+
+
   reservationRaw.room.createdAt;
   const reservation: ReservationRecord = {
     ...reservationRaw,
