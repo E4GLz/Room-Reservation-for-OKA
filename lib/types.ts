@@ -72,7 +72,7 @@ export type ReservationRecord = {
   bookingStatus: BookingStatus;
   managerId: string | null;
   managerApprovalStatus: ManagerApprovalStatus;
-  managerReviewedAt: string | Date | null;  // ← add Date
+  managerReviewedAt: string | Date | null;
   managerReviewerName: string | null;
   managerReviewerEmail: string | null;
   createdByRole: UserRole;
