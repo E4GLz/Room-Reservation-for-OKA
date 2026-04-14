@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { BookingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole } from "@/lib/server-auth";
 import { buildNotification, createAuditEntry, serializeReservation } from "@/lib/reservations";
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response || !auth.user) {
+    return auth.response;
+  }
+
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
 
@@ -32,9 +38,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   await createAuditEntry({
     reservationId: reservation.id,
     action: "CANCELLED",
-    actorName: body.actorName || existing.requesterName,
-    actorEmail: body.actorEmail || existing.requesterEmail,
-    actorRole: body.actorRole || existing.createdByRole,
+    actorName: auth.user.name,
+    actorEmail: auth.user.email,
+    actorRole: auth.user.role,
     notes: body.cancellationNotes || "Cancelled from planner",
     snapshot: reservation
   });

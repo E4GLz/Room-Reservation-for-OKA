@@ -2,9 +2,15 @@ import { NextResponse } from "next/server";
 import { BookingStatus } from "@prisma/client";
 import { format, subMonths } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole } from "@/lib/server-auth";
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   const [rooms, reservations] = await Promise.all([
     prisma.room.findMany(),
     prisma.reservation.findMany({

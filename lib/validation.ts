@@ -53,7 +53,8 @@ export const reservationSchema = z
 
 export const loginSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(6)
+  password: z.string().min(6),
+  remember: z.boolean().optional()
 });
 
 export const userSchema = z.object({
@@ -62,21 +63,8 @@ export const userSchema = z.object({
   phoneNumber: z.string().max(40).optional().or(z.literal("")),
   password: z.string().min(6).max(120).optional().or(z.literal("")),
   managerId: z.string().optional().or(z.literal("")),
-  role: z.nativeEnum(UserRole),
+  role: z.enum(["ADMIN", "MANAGER", "STANDARD"]),
   status: z.nativeEnum(UserStatus)
-}).refine((value) => {
-  if (value.role === UserRole.ADMIN) {
-    return true;
-  }
-
-  if (value.status === UserStatus.INACTIVE) {
-    return true;
-  }
-
-  return Boolean(value.managerId);
-}, {
-  path: ["managerId"],
-  message: "Active staff users must be assigned to a manager."
 });
 
 export const profileSchema = z

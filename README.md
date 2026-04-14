@@ -6,10 +6,10 @@ Internal room reservation system for meetings, workshops, training sessions, and
 
 - Frontend: Next.js App Router, React, TypeScript, Tailwind CSS
 - Backend: Next.js Route Handlers
-- Database: SQLite
+- Database: PostgreSQL
 - ORM: Prisma
 - Charts: Recharts
-- Auth: Local email/password sign-in with admin and staff user roles
+- Auth: Local email/password sign-in with server-side session cookies
 
 ## Features
 
@@ -45,6 +45,8 @@ Internal room reservation system for meetings, workshops, training sessions, and
 ## API Routes
 
 - `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/session`
 - `GET /api/rooms`
 - `POST /api/rooms`
 - `PUT /api/rooms/:id`
@@ -66,6 +68,8 @@ Internal room reservation system for meetings, workshops, training sessions, and
 - `PUT /api/profile`
 - `GET /api/settings`
 - `PUT /api/settings`
+- `POST /api/uploads`
+- `GET /api/uploads/:id`
 
 ## Project Structure
 
@@ -124,7 +128,7 @@ npm install
 npx prisma generate
 ```
 
-5. Create the SQLite database and apply the schema:
+5. Create the PostgreSQL database and apply the schema:
 
 ```bash
 npx prisma db push
@@ -146,10 +150,10 @@ npm run dev
 
 ## Admin Onboarding
 
-- the seed process creates an initial admin account for first-time setup
+- set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env` before running the seed step
+- `npm run seed` will create the initial admin account only when those environment variables are present
 - after first sign-in, update the admin profile password immediately from `/profile`
 - use `/users` to create staff accounts and keep admin access limited
-- before any broader rollout, replace development-style seeded admin credentials with company-controlled credentials
 
 ## Database Reset Behavior
 
@@ -160,10 +164,9 @@ npm run dev
 
 ## Notes For Expansion
 
-- Replace local login with server-side auth/session enforcement before production launch
-- Move from SQLite to PostgreSQL for shared internal deployment
-- Add true email notifications and approval workflows
+- Add a stronger password reset and recovery flow
 - Add export to Excel/PDF if operational teams still need reports
+- Expand attachment retention and lifecycle policies as storage grows
 
 ## Role Model For Rollout
 
@@ -172,11 +175,13 @@ npm run dev
 - staff-created booking requests now move through manager approval first, then continue to admin for final confirmation
 - staff users do not see rooms, reports, users, settings, or booking creation actions in the UI
 
-## Go-Live Warning
+## Go-Live Notes
 
-- the current app still uses client-side session storage for sign-in state
-- that is acceptable for demonstrations and internal review, but it is not sufficient to protect production data by itself
-- before a true live rollout, add server-side authentication and authorization checks to API routes and pages
+- authentication is enforced with server-side session cookies
+- admin-only routes and pages are protected on the server
+- uploads are stored in the database and served through protected API routes
+- set a strong `SESSION_SECRET` before deployment
+- use PostgreSQL in all shared or production environments
 
 ## Important Business Rules Implemented
 
@@ -192,13 +197,17 @@ npm run dev
 ## Environment
 
 ```env
-DATABASE_URL="file:./dev.db"
+DATABASE_URL="postgresql://user:password@host:5432/room_reservation"
+SESSION_SECRET="replace-with-a-long-random-secret"
 SMTP_HOST="smtp.your-company.com"
 SMTP_PORT="587"
 SMTP_SECURE="false"
 SMTP_USER="notifications@your-company.com"
 SMTP_PASS="your-smtp-password"
 SMTP_FROM="Room Reservation Platform <notifications@your-company.com>"
+ADMIN_EMAIL="admin@your-company.com"
+ADMIN_PASSWORD="set-a-strong-admin-password"
+CRON_SECRET="your-shared-cron-secret"
 ```
 
 ## Email Reminders

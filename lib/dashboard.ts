@@ -17,7 +17,7 @@ import {
 import { prisma } from "@/lib/prisma";
 import { serializeReservation } from "@/lib/reservations";
 import { getAppSettings } from "@/lib/settings";
-import type { DashboardPayload } from "@/lib/types";
+import type { AppUser, DashboardPayload } from "@/lib/types";
 import { getWorkWeekDays } from "@/lib/utils";
 export const dynamic = 'force-dynamic';
 
@@ -90,15 +90,15 @@ async function getDashboardQueries(params: {
       where: legacy
         ? {
             bookingStatus: BookingStatus.PENDING,
-            createdByRole: "STANDARD",
+            createdByRole: { not: "ADMIN" },
             reservationDate: {
               gte: todayStart
             }
           }
         : {
             bookingStatus: BookingStatus.PENDING,
-            createdByRole: "STANDARD",
-            managerApprovalStatus: "APPROVED",
+            createdByRole: { not: "ADMIN" },
+            managerApprovalStatus: { in: ["APPROVED", "NOT_REQUIRED"] },
             reservationEndDate: {
               gte: todayStart
             }
@@ -193,7 +193,7 @@ function buildMonthlySeries<T>(
   return series;
 }
 
-export async function getDashboardData(): Promise<DashboardPayload> {
+export async function getDashboardData(viewer?: AppUser | null): Promise<DashboardPayload> {
   const today = new Date();
   const todayStart = startOfDay(today);
   const todayEnd = endOfDay(today);
@@ -387,7 +387,7 @@ export async function getDashboardData(): Promise<DashboardPayload> {
     }))
     .sort((a, b) => a.startsInHours - b.startsInHours);
 
-  return {
+  const payload: DashboardPayload = {
     totals: {
       totalThisMonth: currentMonthTotal,
       confirmedThisMonth: confirmedThisMonth.length,
@@ -444,6 +444,81 @@ export async function getDashboardData(): Promise<DashboardPayload> {
     monthlyTrend: buildMonthlySeries(activeAllTime as Array<ReservationWithRoom & Record<string, unknown>>, () => 1),
     occupiedHoursTrend: buildMonthlySeries(
       activeAllTime as Array<ReservationWithRoom & Record<string, unknown>>,
+      (reservation) => getReservationOccupiedHours(reservation)
+    ).map((item) => ({
+      label: item.label,
+      shortLabel: item.shortLabel,
+      year: item.year,
+      month: item.month,
+      hours: item.total
+    }))
+  };
+
+  if (!viewer || viewer.role === "ADMIN") {
+    return payload;
+  }
+
+  const userThisMonth = activeThisMonth.filter((reservation) => reservation.requesterEmail === viewer.email);
+  const userUpcoming = upcomingReservations.filter((reservation) => reservation.requesterEmail === viewer.email);
+  const userCancelledThisMonth = thisMonthReservations.filter(
+    (reservation) =>
+      reservation.requesterEmail === viewer.email && reservation.bookingStatus === BookingStatus.CANCELLED
+  );
+  const userConfirmedThisMonth = userThisMonth.filter((reservation) => reservation.bookingStatus === BookingStatus.CONFIRMED);
+  const userPendingThisMonth = userThisMonth.filter((reservation) => reservation.bookingStatus === BookingStatus.PENDING);
+
+  return {
+    ...payload,
+    totals: {
+      ...payload.totals,
+      totalThisMonth: userThisMonth.length,
+      confirmedThisMonth: userConfirmedThisMonth.length,
+      pendingThisMonth: userPendingThisMonth.length,
+      cancelledThisMonth: userCancelledThisMonth.length,
+      occupiedHoursThisMonth: Number(
+        userThisMonth
+          .reduce((sum, reservation) => sum + getReservationOccupiedHours(reservation as ReservationWithRoom & Record<string, unknown>), 0)
+          .toFixed(1)
+      )
+    },
+    highlights: {
+      averageUtilization: 0,
+      monthOverMonthDelta: 0,
+      busiestRoom: { name: "No data", total: 0 },
+      highestUtilizationRoom: { name: "No data", utilization: 0 },
+      leastUsedRoom: { name: "No data", utilization: 0 }
+    },
+    bookingsByRoom: [],
+    occupiedHoursByRoom: [],
+    bookingsByEventType: [],
+    utilizationByRoom: [],
+    busiestDays: [],
+    weekdayPattern: [],
+    upcoming: userUpcoming.map((reservation) =>
+      serializeReservation({
+        ...reservation,
+        auditEntries: []
+      } as ReservationWithRoom & { auditEntries: [] })
+    ),
+    pendingApprovals: [],
+    activityByRequester: [],
+    defaultUserActivity: {
+      total: userThisMonth.length,
+      pending: userPendingThisMonth.length,
+      confirmed: userConfirmedThisMonth.length,
+      shareOfMonthlyTotal: 100
+    },
+    adminReminderConfig: {
+      hours: reminderHours,
+      recipientEmails: []
+    },
+    upcomingAdminReminders: [],
+    monthlyTrend: buildMonthlySeries(
+      activeAllTime.filter((reservation) => reservation.requesterEmail === viewer.email) as Array<ReservationWithRoom & Record<string, unknown>>,
+      () => 1
+    ),
+    occupiedHoursTrend: buildMonthlySeries(
+      activeAllTime.filter((reservation) => reservation.requesterEmail === viewer.email) as Array<ReservationWithRoom & Record<string, unknown>>,
       (reservation) => getReservationOccupiedHours(reservation)
     ).map((item) => ({
       label: item.label,

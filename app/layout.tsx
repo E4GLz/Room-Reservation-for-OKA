@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { LanguageProvider } from "@/components/providers/language-provider";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { getAppSettings } from "@/lib/settings";
+import { getCurrentSessionUser } from "@/lib/server-auth";
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store';
 export const metadata: Metadata = {
@@ -16,13 +17,13 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const settings = await getAppSettings();
+  const [settings, user] = await Promise.all([getAppSettings(), getCurrentSessionUser()]);
 
   return (
     <html lang="en">
       <body>
         <LanguageProvider>
-          <SessionProvider>
+          <SessionProvider initialUser={user}>
             <AppShell
               siteTitle={settings.siteTitle}
               siteTitleArabic={"siteTitleArabic" in settings ? settings.siteTitleArabic : null}

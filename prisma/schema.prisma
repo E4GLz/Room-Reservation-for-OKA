@@ -10,6 +10,7 @@ datasource db {
 
 enum UserRole {
   ADMIN
+  MANAGER
   STANDARD
 }
 
@@ -148,4 +149,14 @@ model ReservationAudit {
   createdAt      DateTime    @default(now())
 
   @@index([reservationId, createdAt])
+}
+
+model StoredFile {
+  id           String   @id @default(cuid())
+  kind         String
+  originalName String
+  contentType  String?
+  size         Int
+  bytes        Bytes
+  createdAt    DateTime @default(now())
 }

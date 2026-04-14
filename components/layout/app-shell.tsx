@@ -29,13 +29,14 @@ type NavigationItem = {
   href: any;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  role: "PUBLIC" | "STANDARD" | "ADMIN";
+  role: "PUBLIC" | "AUTH" | "MANAGER" | "ADMIN";
 };
 const navigation: NavigationItem[] = [
   { href: "/login", label: "Login", icon: LogIn, role: "PUBLIC" },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, role: "PUBLIC" },
   { href: "/planner", label: "Planner", icon: CalendarRange, role: "PUBLIC" },
-  { href: "/my-bookings", label: "My Bookings", icon: History, role: "STANDARD" },
+  { href: "/my-bookings", label: "My Bookings", icon: History, role: "AUTH" },
+  { href: "/approvals", label: "Approvals", icon: Bell, role: "MANAGER" },
   { href: "/rooms", label: "Rooms", icon: Building2, role: "ADMIN" },
   { href: "/reports", label: "Reports", icon: ClipboardList, role: "ADMIN" },
   { href: "/users", label: "Users", icon: UserCog, role: "ADMIN" },
@@ -73,8 +74,12 @@ export function AppShell({
       return user?.role === "ADMIN";
     }
 
-    if (item.role === "STANDARD") {
-      return user?.role === "STANDARD";
+    if (item.role === "AUTH") {
+      return Boolean(user?.email);
+    }
+
+    if (item.role === "MANAGER") {
+      return user?.role === "MANAGER" || user?.role === "ADMIN";
     }
 
     return true;
@@ -110,7 +115,8 @@ export function AppShell({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [profileMenuOpen]);
 
-  function handleSignOut() {
+  async function handleSignOut() {
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
     logout();
     setProfileMenuOpen(false);
     router.push("/login");
@@ -225,7 +231,7 @@ export function AppShell({
               </span>
 
               <Link
-                href={user?.role === "ADMIN" ? "/dashboard" : "/my-bookings"}
+                href={user?.role === "ADMIN" ? "/dashboard" : user?.role === "MANAGER" ? "/approvals" : "/my-bookings"}
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white text-slate-700 ring-1 ring-[var(--line)] transition hover:bg-slate-50"
               >
                 <Bell className="h-4 w-4 text-[var(--accent)]" />

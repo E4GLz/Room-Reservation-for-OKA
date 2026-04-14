@@ -49,12 +49,19 @@ export function PlannerGrid({
             const today = isCurrentDay(date);
 
             return (
-              <tr key={toDateKey(date)} className="align-top">
+              <tr
+                key={toDateKey(date)}
+                id={`planner-date-${toDateKey(date)}`}
+                className={cn(
+                  "align-top",
+                  today && "bg-[rgba(37,87,229,0.07)] ring-1 ring-inset ring-[rgba(37,87,229,0.28)]"
+                )}
+              >
                 <td
                   className={cn(
                     "border-b border-r border-slate-200 px-4 py-4",
-                    today && "bg-brand-50",
-                    (weekend || holiday) && "bg-sand"
+                    today && "bg-[rgba(37,87,229,0.14)]",
+                    (weekend || holiday) && !today && "bg-sand"
                   )}
                 >
                   <div className="flex items-center gap-2">
@@ -81,7 +88,8 @@ export function PlannerGrid({
                       key={`${room.id}-${toDateKey(date)}`}
                       className={cn(
                         "border-b border-r border-slate-200 px-3 py-3",
-                        (weekend || holiday) && "bg-slate-50/90"
+                        today && "bg-[rgba(37,87,229,0.07)]",
+                        (weekend || holiday) && !today && "bg-slate-50/90"
                       )}
                     >
                       <div className="flex min-h-24 flex-col gap-2">

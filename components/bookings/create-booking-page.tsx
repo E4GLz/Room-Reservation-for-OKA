@@ -18,13 +18,10 @@ export function CreateBookingPage({ rooms }: { rooms: RoomRecord[] }) {
     );
   }
 
-  if (user?.role !== "ADMIN") {
+  if (!user) {
     return (
       <div className="px-8 py-6">
-        <StatePanel
-          title={t("Admin booking only")}
-          message={t("New bookings are managed from the admin side. Staff users can view the planner and review their booking history.")}
-        />
+        <StatePanel title={t("Sign in required")} message={t("Please sign in to create or request a booking.")} />
       </div>
     );
   }

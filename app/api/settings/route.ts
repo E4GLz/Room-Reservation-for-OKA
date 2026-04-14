@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole } from "@/lib/server-auth";
 import { getAppSettings } from "@/lib/settings";
 import { serializeSettings } from "@/lib/utils";
 import { settingsSchema } from "@/lib/validation";
@@ -11,11 +12,21 @@ function normalizeDateOnly(value: string) {
 }
 
 export async function GET() {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   const settings = await getAppSettings();
   return NextResponse.json(serializeSettings(settings));
 }
 
 export async function PUT(request: Request) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   await getAppSettings();
   const body = await request.json();
   const parsed = settingsSchema.safeParse(body);

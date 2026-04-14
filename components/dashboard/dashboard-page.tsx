@@ -100,7 +100,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
     async function loadManagerApprovals() {
       setManagerApprovalsLoading(true);
       try {
-        const response = await fetch(`/api/manager-approvals?managerEmail=${encodeURIComponent(user.email)}`);
+        const response = await fetch("/api/manager-approvals");
 
         if (!response.ok) {
           setManagerApprovals([]);
@@ -137,10 +137,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          action,
-          actorName: user.name,
-          actorEmail: user.email,
-          actorRole: user.role
+          action
         })
       });
 
@@ -201,9 +198,9 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                   </Button>
                 </Link>
               ) : (
-                <Link href="/my-bookings">
+                <Link href="/bookings/new">
                   <Button variant="secondary" className="shadow-sm">
-                    {t("My bookings")}
+                    {t("Request booking")}
                   </Button>
                 </Link>
               )}
@@ -352,8 +349,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
               <Link href="/my-bookings">
                 <Button variant="secondary" className="w-full justify-start">{t("Open my booking history")}</Button>
               </Link>
+              <Link href="/bookings/new">
+                <Button variant="secondary" className="w-full justify-start">{t("Request a booking")}</Button>
+              </Link>
               <div className="rounded-[18px] bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                {t("Room setup, booking creation, edits, cancellations, users, and settings remain managed from the admin side.")}
+                {t("Room setup, direct booking creation, edits, cancellations, users, and settings remain managed from the admin side.")}
               </div>
             </div>
           </Card>

@@ -212,13 +212,6 @@ export async function validateReservationBusinessRules(
     };
   }
 
-  if (input.createdByRole === UserRole.STANDARD && !requester.managerId) {
-    return {
-      ok: false as const,
-      error: "This user does not have a manager assigned yet. Please contact the admin team."
-    };
-  }
-
   const conflicts = await findConflictingReservations({
     roomId: input.roomId,
     reservationDate: input.reservationDate,
@@ -329,6 +322,13 @@ export function getManagerApprovalDefaults(params: {
     };
   }
 
+  if (params.createdByRole === UserRole.MANAGER || !params.managerId) {
+    return {
+      managerId: params.managerId ?? null,
+      managerApprovalStatus: ManagerApprovalStatus.NOT_REQUIRED
+    };
+  }
+
   return {
     managerId: params.managerId ?? null,
     managerApprovalStatus: ManagerApprovalStatus.PENDING
@@ -340,7 +340,7 @@ export async function createAuditEntry(params: {
   action: string;
   actorName: string;
   actorEmail: string;
-  actorRole: "ADMIN" | "STANDARD";
+  actorRole: UserRole;
   notes?: string;
   snapshot?: Prisma.InputJsonValue;
 }) {
@@ -374,8 +374,20 @@ function extractLegacyFoodServiceLocation(remarks: string | null | undefined) {
   return match?.[1]?.trim() || null;
 }
 
+function extractLegacyBackupValue(remarks: string | null | undefined, label: string) {
+  if (!remarks) {
+    return null;
+  }
+
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = remarks.match(new RegExp(`${escapedLabel}:\\s*(.+)`, "i"));
+  return match?.[1]?.trim() || null;
+}
+
 export function serializeReservation(reservation: ReservationForSerialization) {
   const record = reservation as ReservationForSerialization & Record<string, unknown>;
+  const legacyGuestCompanyLogo = extractLegacyBackupValue(reservation.remarks, "Guest company logo");
+  const legacyMaterialsToDisplay = extractLegacyBackupValue(reservation.remarks, "Materials");
 
   return {
     ...record,
@@ -384,10 +396,10 @@ export function serializeReservation(reservation: ReservationForSerialization) {
     reservationType: (record.reservationType as string | undefined) ?? reservation.eventType ?? "Meeting",
     guestCompany: (record.guestCompany as string | undefined) ?? reservation.bookingCompany,
     guestName: (record.guestName as string | null | undefined) ?? null,
-    guestCompanyLogo: (record.guestCompanyLogo as string | null | undefined) ?? null,
+    guestCompanyLogo: (record.guestCompanyLogo as string | null | undefined) ?? legacyGuestCompanyLogo ?? null,
     chargedCompany: (record.chargedCompany as string | undefined) ?? reservation.bookingCompany,
     chargedDepartment: (record.chargedDepartment as string | undefined) ?? reservation.meetingName,
-    materialsToDisplay: (record.materialsToDisplay as string | null | undefined) ?? null,
+    materialsToDisplay: (record.materialsToDisplay as string | null | undefined) ?? legacyMaterialsToDisplay ?? null,
     foodServiceRequired: (record.foodServiceRequired as boolean | undefined) ?? false,
     foodServiceLocation:
       (record.foodServiceLocation as string | null | undefined) ??

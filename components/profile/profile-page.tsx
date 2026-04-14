@@ -52,10 +52,7 @@ export function ProfilePage() {
       const response = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          id: user.id,
-          ...form
-        })
+        body: JSON.stringify(form)
       });
 
       if (!response.ok) {
@@ -103,7 +100,8 @@ export function ProfilePage() {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => {
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
                 logout();
                 router.push("/login");
               }}

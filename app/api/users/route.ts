@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole } from "@/lib/server-auth";
 import { validateUniqueUserIdentity } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { userSchema } from "@/lib/validation";
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   const users = await prisma.user.findMany({
     include: {
       manager: true
@@ -18,6 +24,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   const body = await request.json();
   const parsed = userSchema.safeParse(body);
 
@@ -43,9 +54,9 @@ export async function POST(request: Request) {
       name: parsed.data.name,
       email: uniqueness.email,
       phoneNumber: uniqueness.phoneNumber,
-      managerId: parsed.data.role === "ADMIN" ? null : parsed.data.managerId || null,
+      managerId: parsed.data.role === "STANDARD" ? parsed.data.managerId || null : null,
       passwordHash: hashPassword(parsed.data.password),
-      role: parsed.data.role,
+      role: parsed.data.role as "ADMIN" | "MANAGER" | "STANDARD",
       status: parsed.data.status
     }
   });

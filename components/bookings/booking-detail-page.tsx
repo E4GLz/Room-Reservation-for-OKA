@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download } from "lucide-react";
+import { CheckCircle2, Clock3, Download, PencilLine, ShieldCheck, UserRound, XCircle } from "lucide-react";
 import { BookingStatus, UserRole } from "@prisma/client";
 import { BookingForm } from "@/components/bookings/booking-form";
 import { Button } from "@/components/ui/button";
@@ -12,12 +12,15 @@ import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
 import { parseStoredAttachments } from "@/lib/attachments";
 import {
+  canUserViewReservationDetails,
   formatLongDate,
+  getRoleLabel,
   getManagerApprovalLabel,
   getManagerApprovalTone,
   reservationCanBeEditedByUser
 } from "@/lib/utils";
-import type { ReservationRecord, RoomRecord } from "@/lib/types";
+import { readErrorMessage } from "@/lib/client-errors";
+import type { ReservationAuditRecord, ReservationRecord, RoomRecord } from "@/lib/types";
 
 type BookingDetailPageProps = {
   reservation: ReservationRecord;
@@ -30,8 +33,7 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
   const router = useRouter();
   const { t } = useLanguage();
   const { user } = useSession();
-  const canView =
-    user?.role === "ADMIN" || reservation.requesterEmail === user?.email || reservation.managerId === user?.id;
+  const canView = canUserViewReservationDetails(reservation, user);
   const canEdit = reservationCanBeEditedByUser(reservation, user);
   const canManageAttachments = user?.role === "ADMIN";
   const guestLogoAttachments = parseStoredAttachments(reservation.guestCompanyLogo);
@@ -41,6 +43,10 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
     reservation.createdByRole === UserRole.STANDARD &&
     reservation.managerApprovalStatus === "PENDING" &&
     reservation.bookingStatus === BookingStatus.PENDING;
+  const canAdminReview =
+    user?.role === UserRole.ADMIN &&
+    reservation.bookingStatus === BookingStatus.PENDING &&
+    (reservation.createdByRole !== UserRole.STANDARD || reservation.managerApprovalStatus !== "PENDING");
 
   if (!canView) {
     return (
@@ -48,7 +54,7 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
         <Card className="rounded-[28px]">
           <p className="text-lg font-semibold text-slate-950">{t("Booking details are restricted")}</p>
           <p className="mt-2 text-sm text-slate-600">
-            {t("Staff users can only open their own booking history. Please use the planner for the general schedule view.")}
+            {t("You can only open booking details that belong to you or your assigned approvals. Please use the planner for the general schedule view.")}
           </p>
           <div className="mt-6">
             <Link href="/planner">
@@ -70,9 +76,6 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        actorName: user?.name,
-        actorEmail: user?.email,
-        actorRole: user?.role ?? UserRole.STANDARD,
         cancellationNotes: t("Cancelled from booking detail page")
       })
     });
@@ -85,12 +88,34 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action,
-        actorName: user?.name,
-        actorEmail: user?.email,
-        actorRole: user?.role ?? UserRole.STANDARD
+        action
       })
     });
+
+    router.refresh();
+  }
+
+  async function handleAdminReview(action: "approve" | "reject") {
+    const confirmed =
+      action === "approve"
+        ? window.confirm(t("Confirm this booking request?"))
+        : window.confirm(t("Reject this booking request?"));
+
+    if (!confirmed) {
+      return;
+    }
+
+    const response = await fetch(`/api/reservations/${reservation.id}/admin-approval`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action })
+    });
+
+    if (!response.ok) {
+      const message = await readErrorMessage(response, t("Unable to process admin approval."));
+      window.alert(message);
+      return;
+    }
 
     router.refresh();
   }
@@ -119,7 +144,7 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
 
         <div className="mt-6 grid gap-4 lg:grid-cols-3">
           <DetailItem label={t("Reservation type")} value={t(reservation.reservationType)} />
-          <DetailItem label={t("Guest company")} value={reservation.guestCompany} />
+          <DetailItem label={t("Meeting Title")} value={reservation.guestCompany} />
           <DetailItem label={t("Guest name")} value={reservation.guestName || t("Not provided")} />
           <DetailItem label={t("Charged company")} value={reservation.chargedCompany} />
           <DetailItem label={t("Charged department")} value={reservation.chargedDepartment} />
@@ -171,6 +196,16 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
               </Button>
             </>
           ) : null}
+          {canAdminReview ? (
+            <>
+              <Button variant="ghost" onClick={() => void handleAdminReview("reject")}>
+                {t("Reject request")}
+              </Button>
+              <Button onClick={() => void handleAdminReview("approve")}>
+                {t("Accept booking request")}
+              </Button>
+            </>
+          ) : null}
           {canEdit && reservation.bookingStatus !== BookingStatus.CANCELLED ? (
             <Button variant="danger" onClick={handleCancel}>
               {t("Cancel booking")}
@@ -194,23 +229,137 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
         <h3 className="text-lg font-semibold text-slate-950">{t("Audit trail")}</h3>
         <div className="mt-4 space-y-3">
           {reservation.auditEntries?.map((entry) => (
-            <div key={entry.id} className="rounded-2xl border border-slate-200 px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-900">{entry.action}</p>
-                <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
-                  {new Date(entry.createdAt).toLocaleString()}
-                </p>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">
-                {entry.actorName} ({entry.actorRole})
-              </p>
-              <p className="mt-2 text-sm text-slate-500">{entry.notes || t("No note recorded.")}</p>
-            </div>
+            <AuditEntryCard key={entry.id} entry={entry} t={t} />
           ))}
         </div>
       </Card>
     </div>
   );
+}
+
+function AuditEntryCard({
+  entry,
+  t
+}: {
+  entry: ReservationAuditRecord;
+  t: (key: string) => string;
+}) {
+  const meta = getAuditEntryMeta(entry, t);
+
+  return (
+    <div className={`rounded-2xl border px-4 py-4 ${meta.containerClassName}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className={`mt-0.5 rounded-full p-2 ${meta.iconClassName}`}>
+            <meta.Icon className="h-4 w-4" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-950">{meta.title}</p>
+            <p className="mt-1 text-sm text-slate-600">{meta.description}</p>
+          </div>
+        </div>
+        <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+          {new Date(entry.createdAt).toLocaleString()}
+        </p>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-slate-600">
+        <span className="font-medium text-slate-800">{entry.actorName}</span>
+        <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-medium uppercase tracking-[0.12em] text-slate-500 ring-1 ring-slate-200">
+          {t(getRoleLabel(entry.actorRole))}
+        </span>
+      </div>
+      {entry.notes ? (
+        <div className="mt-3 rounded-xl bg-white/80 px-3 py-2 text-sm text-slate-600 ring-1 ring-slate-200">
+          {entry.notes}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function getAuditEntryMeta(entry: ReservationAuditRecord, t: (key: string) => string) {
+  switch (entry.action) {
+    case "CREATED":
+      return {
+        title: t("Booking request created"),
+        description: t("The reservation was submitted into the system."),
+        Icon: PencilLine,
+        containerClassName: "border-slate-200 bg-slate-50",
+        iconClassName: "bg-slate-100 text-slate-700"
+      };
+    case "UPDATED":
+      return {
+        title: t("Booking updated"),
+        description: t("Reservation details were changed."),
+        Icon: PencilLine,
+        containerClassName: "border-sky-200 bg-sky-50",
+        iconClassName: "bg-sky-100 text-sky-700"
+      };
+    case "ROOM_REASSIGNED":
+      return {
+        title: t("Room reassigned"),
+        description: t("The reservation was moved to a different room."),
+        Icon: PencilLine,
+        containerClassName: "border-indigo-200 bg-indigo-50",
+        iconClassName: "bg-indigo-100 text-indigo-700"
+      };
+    case "MANAGER_APPROVAL_REQUESTED":
+      return {
+        title: t("Sent to manager"),
+        description: t("The request is waiting for manager review before admin confirmation."),
+        Icon: Clock3,
+        containerClassName: "border-amber-200 bg-amber-50",
+        iconClassName: "bg-amber-100 text-amber-700"
+      };
+    case "MANAGER_APPROVED":
+      return {
+        title: t("Manager approved"),
+        description: t("The request passed manager review and moved to admin."),
+        Icon: ShieldCheck,
+        containerClassName: "border-blue-200 bg-blue-50",
+        iconClassName: "bg-blue-100 text-blue-700"
+      };
+    case "MANAGER_REJECTED":
+      return {
+        title: t("Manager rejected"),
+        description: t("The request was declined during manager review."),
+        Icon: XCircle,
+        containerClassName: "border-rose-200 bg-rose-50",
+        iconClassName: "bg-rose-100 text-rose-700"
+      };
+    case "ADMIN_APPROVED":
+      return {
+        title: t("Admin approved"),
+        description: t("The request was confirmed and became an active booking."),
+        Icon: CheckCircle2,
+        containerClassName: "border-emerald-200 bg-emerald-50",
+        iconClassName: "bg-emerald-100 text-emerald-700"
+      };
+    case "ADMIN_REJECTED":
+      return {
+        title: t("Admin rejected"),
+        description: t("The request was declined during admin review."),
+        Icon: XCircle,
+        containerClassName: "border-rose-200 bg-rose-50",
+        iconClassName: "bg-rose-100 text-rose-700"
+      };
+    case "CANCELLED":
+      return {
+        title: t("Booking cancelled"),
+        description: t("The reservation was cancelled but kept in history."),
+        Icon: XCircle,
+        containerClassName: "border-rose-200 bg-rose-50",
+        iconClassName: "bg-rose-100 text-rose-700"
+      };
+    default:
+      return {
+        title: entry.action,
+        description: t("System activity recorded for this reservation."),
+        Icon: UserRound,
+        containerClassName: "border-slate-200 bg-slate-50",
+        iconClassName: "bg-slate-100 text-slate-700"
+      };
+  }
 }
 
 function DetailItem({ label, value }: { label: string; value: string }) {
@@ -246,7 +395,7 @@ function AttachmentPanel({
         <p className="mt-3 text-sm text-slate-600">{t("No uploaded attachments are available for this booking.")}</p>
       ) : (
         <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <AttachmentList title={t("Guest company logo")} items={guestLogoAttachments} emptyMessage={t("No logo uploaded.")} t={t} />
+          <AttachmentList title={t("Meeting title logo")} items={guestLogoAttachments} emptyMessage={t("No logo uploaded.")} t={t} />
           <AttachmentList title={t("Materials to display")} items={materialAttachments} emptyMessage={t("No material files uploaded.")} t={t} />
         </div>
       )}
@@ -278,7 +427,7 @@ function AttachmentList({
               {item.url ? (
                 <a
                   href={item.url}
-                  download
+                  download={item.name}
                   className="inline-flex items-center gap-2 text-sm font-medium text-[var(--accent)] hover:underline"
                 >
                   <Download className="h-4 w-4" />

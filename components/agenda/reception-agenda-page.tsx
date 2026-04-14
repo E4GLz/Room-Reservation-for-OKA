@@ -1,20 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { CalendarDays, Clock3, MapPin, RefreshCcw, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CalendarDays, Clock3, MapPin, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 import { useLanguage } from "@/components/providers/language-provider";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 type AgendaItem = {
   id: string;
   startTime: string;
   endTime: string;
-  meetingName: string;
-  guestCompany: string;
+  meetingTitle: string;
   roomName: string;
   roomLocation: string;
 };
@@ -26,6 +24,7 @@ export function ReceptionAgendaPage({
   siteTitle: string;
   items: AgendaItem[];
 }) {
+  const router = useRouter();
   const [now, setNow] = useState(() => new Date());
   const { language, t } = useLanguage();
 
@@ -34,15 +33,22 @@ export function ReceptionAgendaPage({
     return () => window.clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const refreshInterval = window.setInterval(() => {
+      router.refresh();
+    }, 60000);
+
+    return () => window.clearInterval(refreshInterval);
+  }, [router]);
+
   const locale = language === "ar" ? arSA : enUS;
   const todayLabel = format(now, "EEEE, dd MMMM yyyy", { locale });
   const timeLabel = format(now, "hh:mm a", { locale });
-  const roomCount = new Set(items.map((item) => item.roomName)).size;
 
   return (
     <main className="min-h-screen px-6 py-8 lg:px-10">
       <div className="mx-auto max-w-[1680px] space-y-8">
-        <section className="overflow-hidden rounded-[36px] border border-[#d8e4ff] bg-[linear-gradient(135deg,#14205b_0%,#2557e5_54%,#9ac0ff_132%)] px-8 py-10 text-white shadow-[0_28px_60px_-36px_rgba(20,32,91,0.9)] lg:px-12 lg:py-12">
+        <section className="overflow-hidden rounded-[36px] border border-[#a9bce9] bg-[linear-gradient(135deg,#0f1847_0%,#1a3eaa_52%,#6f95ff_128%)] px-8 py-10 text-white shadow-[0_28px_60px_-36px_rgba(15,24,71,0.92)] lg:px-12 lg:py-12">
           <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr] lg:items-end">
             <div>
               <p className="text-[11px] uppercase tracking-[0.32em] text-white/70">{t("Reception display")}</p>
@@ -72,44 +78,7 @@ export function ReceptionAgendaPage({
           </div>
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
-          <div className="space-y-6">
-            <Card className="bg-[linear-gradient(180deg,#ffffff,#f7faff)]">
-              <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--accent)]">{t("Daily overview")}</p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{t("All confirmed events for today")}</h2>
-              <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-5">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{t("Today's events")}</p>
-                  <p className="mt-3 text-3xl font-semibold text-slate-950">{items.length}</p>
-                  <p className="mt-2 text-sm text-slate-600">{t("Every confirmed meeting remains visible here for the full day.")}</p>
-                </div>
-                <div className="rounded-[24px] border border-slate-200 bg-slate-50 px-5 py-5">
-                  <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{t("Rooms in use")}</p>
-                  <p className="mt-3 text-3xl font-semibold text-slate-950">{roomCount}</p>
-                  <p className="mt-2 text-sm text-slate-600">{t("Visitors can use the room name and location to find their destination.")}</p>
-                </div>
-              </div>
-            </Card>
-
-            <Card>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--accent)]">{t("Quick summary")}</p>
-                  <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{items.length} {t("meetings today")}</h3>
-                </div>
-                <Link href="/login">
-                  <Button variant="secondary" className="gap-2">
-                    <RefreshCcw className="h-4 w-4" />
-                    {t("Admin sign in")}
-                  </Button>
-                </Link>
-              </div>
-              <div className="mt-5 rounded-[24px] bg-[var(--accent-soft)] px-5 py-4 text-sm leading-7 text-slate-700">
-                {t("This screen is designed for reception and visitors. It only shows today's confirmed agenda with meeting names and room locations.")}
-              </div>
-            </Card>
-          </div>
-
+        <section>
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between gap-4 border-b border-[var(--line)] pb-4">
               <div>
@@ -135,8 +104,7 @@ export function ReceptionAgendaPage({
                       </div>
 
                       <div className="space-y-1">
-                        <p className="text-xl font-semibold text-slate-950">{item.meetingName}</p>
-                        <p className="text-sm text-slate-600">{item.guestCompany}</p>
+                        <p className="text-xl font-bold text-slate-950">{item.meetingTitle}</p>
                       </div>
 
                       <div className="flex flex-col items-start gap-2 lg:items-end">

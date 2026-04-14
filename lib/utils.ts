@@ -46,6 +46,10 @@ export function getRoleLabel(role: string | null | undefined) {
     return "Admin";
   }
 
+  if (role === "MANAGER") {
+    return "Manager";
+  }
+
   if (role === "STANDARD") {
     return "Staff";
   }
@@ -248,6 +252,17 @@ export function reservationCanBeEditedByUser(
   }
 
   return user.role === "ADMIN";
+}
+
+export function canUserViewReservationDetails(
+  reservation: Pick<ReservationRecord, "requesterEmail" | "managerId">,
+  user: { id?: string; email?: string; role?: string } | null
+) {
+  if (!user) {
+    return false;
+  }
+
+  return user.role === "ADMIN" || reservation.requesterEmail === user.email || reservation.managerId === user.id;
 }
 
 export function describeNotification(type: "created" | "updated" | "cancelled" | "conflict", context: string) {

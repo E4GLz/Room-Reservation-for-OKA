@@ -20,7 +20,7 @@ function initialForm(user?: UserRecord | null) {
     phoneNumber: user?.phoneNumber ?? "",
     password: "",
     managerId: user?.managerId ?? "",
-    role: user?.role ?? UserRole.STANDARD,
+    role: user?.role ?? ("STANDARD" as UserRole),
     status: user?.status ?? UserStatus.ACTIVE
   };
 }
@@ -33,7 +33,9 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const managerOptions = users.filter((entry) => entry.status === UserStatus.ACTIVE);
+  const managerOptions = users.filter(
+    (entry) => entry.status === UserStatus.ACTIVE && (entry.role === UserRole.ADMIN || entry.role === ("MANAGER" as UserRole))
+  );
   const pendingRegistrations = users.filter(
     (entry) => entry.role === UserRole.STANDARD && entry.status === UserStatus.INACTIVE
   );
@@ -100,7 +102,7 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
           <p className="mt-1 text-sm text-amber-800">
             {pendingRegistrations.length} {t(pendingRegistrations.length === 1 ? "newly registered account is waiting for admin review." : "newly registered accounts are waiting for admin review.")}
             {" "}
-            {t("Open the user record, assign a manager if needed, and switch the status to Active to approve access.")}
+            {t("Open the user record and switch the status to Active to approve access.")}
           </p>
         </div>
       ) : null}
@@ -139,23 +141,24 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
                   setForm({
                     ...form,
                     role: event.target.value as UserRole,
-                    managerId: event.target.value === UserRole.ADMIN ? "" : form.managerId
+                    managerId: event.target.value === "STANDARD" ? form.managerId : ""
                   })
                 }
               >
                 <option value={UserRole.ADMIN}>{t("Admin")}</option>
+                <option value="MANAGER">{t("Manager")}</option>
                 <option value={UserRole.STANDARD}>{t("Staff")}</option>
               </Select>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Manager")}</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Manager (optional)")}</label>
               <Select
                 value={form.managerId}
-                disabled={form.role === UserRole.ADMIN}
+                disabled={form.role !== "STANDARD"}
                 onChange={(event) => setForm({ ...form, managerId: event.target.value })}
               >
                 <option value="">
-                  {form.role === UserRole.ADMIN ? t("Not required for admins") : t("Select manager")}
+                  {form.role === "STANDARD" ? t("Select manager if needed") : t("Not required for this role")}
                 </option>
                 {managerOptions
                   .filter((entry) => entry.id !== editingUser?.id)

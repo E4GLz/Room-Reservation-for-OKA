@@ -1,9 +1,15 @@
 import { NextResponse } from "next/server";
 import { BookingStatus, ManagerApprovalStatus, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/server-auth";
 import { buildNotification, createAuditEntry, isLegacyReservationSchemaError, serializeReservation } from "@/lib/reservations";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiUser();
+  if (auth.response || !auth.user) {
+    return auth.response;
+  }
+
   const { id } = await params;
   const body = await request.json().catch(() => ({}));
   const action = body.action === "reject" ? "reject" : "approve";
@@ -33,6 +39,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Reservation not found." }, { status: 404 });
   }
 
+  const canReview = auth.user.role === "ADMIN" || existing.managerId === auth.user.id;
+  if (!canReview) {
+    return NextResponse.json({ error: "You do not have access to review this request." }, { status: 403 });
+  }
+
   if (existing.createdByRole !== UserRole.STANDARD) {
     return NextResponse.json({ error: "Manager approval is only required for staff bookings." }, { status: 400 });
   }
@@ -47,8 +58,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       managerApprovalStatus:
         action === "approve" ? ManagerApprovalStatus.APPROVED : ManagerApprovalStatus.REJECTED,
       managerReviewedAt: new Date(),
-      managerReviewerName: body.actorName || "Manager",
-      managerReviewerEmail: body.actorEmail || null,
+      managerReviewerName: auth.user.name,
+      managerReviewerEmail: auth.user.email,
       bookingStatus: action === "approve" ? BookingStatus.PENDING : BookingStatus.CANCELLED,
       cancelledAt: action === "reject" ? new Date() : null,
       cancellationNotes:
@@ -63,9 +74,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   await createAuditEntry({
     reservationId: reservation.id,
     action: action === "approve" ? "MANAGER_APPROVED" : "MANAGER_REJECTED",
-    actorName: body.actorName || "Manager",
-    actorEmail: body.actorEmail || existing.requesterEmail,
-    actorRole: body.actorRole || UserRole.STANDARD,
+    actorName: auth.user.name,
+    actorEmail: auth.user.email,
+    actorRole: auth.user.role,
     notes:
       action === "approve"
         ? body.notes || "Approved by direct manager and forwarded to admin."

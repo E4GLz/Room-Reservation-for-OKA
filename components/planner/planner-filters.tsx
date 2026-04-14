@@ -45,7 +45,7 @@ export function PlannerFilters({
       </Select>
 
       <Input
-        placeholder={t("Search guest company or charged department")}
+        placeholder={t("Search meeting title or charged department")}
         value={filters.search}
         onChange={(event) => onChange({ ...filters, search: event.target.value })}
       />

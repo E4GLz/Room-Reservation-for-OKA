@@ -3,6 +3,7 @@ import { ReportsPage } from "@/components/reports/reports-page";
 import { BookingStatus } from "@prisma/client";
 import { addMonths, eachDayOfInterval, format, max as maxDate, min as minDate, startOfMonth } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { requireAdminPageUser } from "@/lib/server-auth";
 export const dynamic = 'force-dynamic';
 
 function getOccupiedHours(reservation: {
@@ -126,6 +127,7 @@ async function getReports() {
 }
 
 export default async function Reports() {
+  await requireAdminPageUser();
   const data = await getReports();
 
   return (
