@@ -15,10 +15,17 @@ async function getSessionUserRecord() {
     return null;
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: payload.sub },
-    include: { manager: true }
-  });
+  let user = null;
+
+  try {
+    user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      include: { manager: true }
+    });
+  } catch (error) {
+    console.error("Session user lookup failed.", error);
+    return null;
+  }
 
   if (!user || user.status !== "ACTIVE") {
     return null;
@@ -52,10 +59,32 @@ export async function requireAdminPageUser() {
   return user;
 }
 
+export function getDefaultRouteForRole(role: UserRole) {
+  if (role === "SERVICE") {
+    return "/service";
+  }
+
+  if (role === "MANAGER") {
+    return "/approvals";
+  }
+
+  return "/dashboard";
+}
+
+export async function requirePageRole(...roles: UserRole[]) {
+  const user = await requireAuthenticatedPageUser();
+
+  if (!roles.includes(user.role)) {
+    redirect(getDefaultRouteForRole(user.role));
+  }
+
+  return user;
+}
+
 export async function redirectAuthenticatedUser() {
   const user = await getCurrentSessionUser();
   if (user) {
-    redirect("/dashboard");
+    redirect(getDefaultRouteForRole(user.role));
   }
 }
 

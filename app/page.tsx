@@ -43,7 +43,10 @@ export default function HomePage() {
   return (
     <main className="min-h-screen px-6 py-8 lg:px-10">
       <div className="mx-auto max-w-[1500px] space-y-8">
-        <section className="overflow-hidden rounded-[32px] border border-[#d8e4ff] bg-[linear-gradient(135deg,#14205b_0%,#2557e5_54%,#9ac0ff_132%)] px-8 py-10 text-white shadow-[0_28px_60px_-36px_rgba(20,32,91,0.9)] lg:px-12 lg:py-12">
+        <section
+          className="hero-home-banner overflow-hidden rounded-[32px] border border-white/18 px-8 py-10 text-white shadow-[0_28px_60px_-36px_rgba(20,32,91,0.9)] lg:px-12 lg:py-12"
+          style={{ background: "var(--hero-home-banner-bg)" }}
+        >
           <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
             <div>
               <div className="inline-flex items-center rounded-[28px] border border-white/14 bg-white/12 px-6 py-5 shadow-[0_20px_40px_-28px_rgba(8,15,54,0.9)] backdrop-blur-sm">
@@ -65,28 +68,26 @@ export default function HomePage() {
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link href="/login">
-                  <Button variant="secondary" className="shadow-sm">
+                  <Button variant="secondary" className="!bg-white !text-slate-950 shadow-sm hover:!bg-white/90">
                     {t("Go to login")}
                   </Button>
                 </Link>
                 <Link href="/register">
-                  <Button variant="secondary" className="shadow-sm">
+                  <Button variant="secondary" className="!bg-white !text-slate-950 shadow-sm hover:!bg-white/90">
                     {t("Create account")}
                   </Button>
                 </Link>
-                <a href="#features">
-                  <Button variant="ghost" className="bg-white/10 text-white ring-white/20 hover:bg-white/16">
-                    {t("Explore features")}
-                  </Button>
-                </a>
               </div>
             </div>
 
-            <Card className="border-white/14 bg-white/10 text-white shadow-none backdrop-blur-sm">
+            <Card className="hero-highlight-panel border-white/12 bg-[rgba(255,255,255,0.10)] text-white shadow-none backdrop-blur-sm">
               <p className="text-[11px] uppercase tracking-[0.24em] text-white/68">{t("What the platform helps with")}</p>
               <div className="mt-5 space-y-3">
                 {highlights.map((item) => (
-                  <div key={item} className="flex items-start gap-3 rounded-[20px] border border-white/10 bg-white/6 px-4 py-3">
+                  <div
+                    key={item}
+                    className="hero-highlight-item flex items-start gap-3 rounded-[20px] border border-white/10 bg-[rgba(255,255,255,0.06)] px-4 py-3"
+                  >
                     <TimerReset className="mt-0.5 h-4 w-4 text-white/78" />
                     <p className="text-sm leading-6 text-white/84">{t(item)}</p>
                   </div>
@@ -97,24 +98,27 @@ export default function HomePage() {
         </section>
 
         <section id="features" className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-          <Card>
+          <Card className="bg-[var(--panel-elevated)]">
             <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--accent)]">{t("Platform purpose")}</p>
-            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[var(--ink)]">
               {t("Built for teams that already know the schedule matters every day.")}
             </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-600">
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-[var(--muted)]">
               {t("The application keeps the comfort of a room-by-date planning sheet while adding the controls a live internal operation needs: conflict checking, booking history, food-service visibility, reminder emails, and role-based access.")}
             </p>
             <div className="mt-8 grid gap-4 md:grid-cols-2">
               {featureCards.map((card) => {
                 const Icon = card.icon;
                 return (
-                  <div key={card.title} className="rounded-[24px] border border-[#d8e4ff] bg-[linear-gradient(180deg,#ffffff,#f5f8ff)] p-5 shadow-[0_16px_36px_-30px_rgba(37,87,229,0.34)]">
-                    <div className="inline-flex rounded-2xl bg-[var(--accent-soft)] p-3 text-[var(--accent)]">
+                  <div
+                    key={card.title}
+                    className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-soft)] p-5 shadow-[0_16px_36px_-30px_rgba(37,87,229,0.22)]"
+                  >
+                    <div className="inline-flex rounded-2xl bg-[var(--accent-soft)] p-3 text-[var(--accent)] ring-1 ring-[var(--line)]">
                       <Icon className="h-6 w-6" />
                     </div>
-                    <h3 className="mt-4 text-lg font-semibold text-slate-950">{t(card.title)}</h3>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">{t(card.description)}</p>
+                    <h3 className="mt-4 text-lg font-semibold text-[var(--ink)]">{t(card.title)}</h3>
+                    <p className="mt-2 text-sm leading-6 text-[var(--muted)]">{t(card.description)}</p>
                   </div>
                 );
               })}
@@ -122,18 +126,18 @@ export default function HomePage() {
           </Card>
 
           <div className="space-y-6">
-            <Card>
+            <Card className="bg-[var(--panel-elevated)]">
               <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--accent)]">{t("For staff")}</p>
-              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{t("Simple daily experience")}</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-600">
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[var(--ink)]">{t("Simple daily experience")}</h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
                 {t("Staff users can check the planner, follow their own booking history, and review statuses without exposing room setup or broader administrative controls.")}
               </p>
             </Card>
 
-            <Card>
+            <Card className="bg-[var(--panel-elevated)]">
               <p className="text-[11px] uppercase tracking-[0.24em] text-[var(--accent)]">{t("For operations")}</p>
-              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{t("Controlled admin workflow")}</h3>
-              <p className="mt-3 text-sm leading-7 text-slate-600">
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[var(--ink)]">{t("Controlled admin workflow")}</h3>
+              <p className="mt-3 text-sm leading-7 text-[var(--muted)]">
                 {t("Admin users manage rooms, create and adjust bookings, monitor approvals, and receive reminder notifications for upcoming meetings that need preparation.")}
               </p>
               <div className="mt-6">

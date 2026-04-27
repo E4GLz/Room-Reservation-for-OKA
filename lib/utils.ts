@@ -50,6 +50,10 @@ export function getRoleLabel(role: string | null | undefined) {
     return "Manager";
   }
 
+  if (role === "SERVICE") {
+    return "Service";
+  }
+
   if (role === "STANDARD") {
     return "Staff";
   }
@@ -123,8 +127,27 @@ export function isCurrentDay(date: Date) {
   return isToday(date);
 }
 
+export function isReservationFinished(reservation: Pick<ReservationRecord, "bookingStatus" | "reservationEndDate" | "endTime">) {
+  if (reservation.bookingStatus !== "CONFIRMED") {
+    return false;
+  }
+
+  const endDate = typeof reservation.reservationEndDate === "string" ? parseISO(reservation.reservationEndDate) : reservation.reservationEndDate;
+  const [hours, minutes] = reservation.endTime.split(":").map(Number);
+  const endOfReservation = set(endDate, {
+    hours,
+    minutes,
+    seconds: 0,
+    milliseconds: 0
+  });
+
+  return new Date() > endOfReservation;
+}
+
 export function getStatusTone(status: string) {
   switch (status) {
+    case "FINISHED":
+      return "bg-slate-100 text-slate-700 ring-slate-200";
     case "CONFIRMED":
       return "bg-emerald-100 text-emerald-800 ring-emerald-200";
     case "PENDING":

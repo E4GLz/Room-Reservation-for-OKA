@@ -18,7 +18,7 @@ export function PlannerFilters({
   const { t } = useLanguage();
 
   return (
-    <div className="grid gap-3 rounded-[26px] border border-[var(--line)] bg-[rgba(255,255,255,0.86)] p-4 backdrop-blur-sm lg:grid-cols-4">
+    <div className="grid gap-3 rounded-[26px] border border-[var(--line)] bg-[var(--panel-elevated)] p-4 backdrop-blur-sm lg:grid-cols-4">
       <Select value={filters.roomId} onChange={(event) => onChange({ ...filters, roomId: event.target.value })}>
         <option value="">{t("All rooms")}</option>
         {rooms.map((room) => (

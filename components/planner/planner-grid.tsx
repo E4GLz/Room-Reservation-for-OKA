@@ -22,20 +22,29 @@ export function PlannerGrid({
     dates,
     rooms.map((room) => room.id)
   );
+  const roomColumnWidth = rooms.length > 0 ? `${(100 / rooms.length).toFixed(2)}%` : "auto";
 
   return (
-    <div className="overflow-auto rounded-[28px] border border-[var(--line)] bg-white/90">
-      <table className="min-w-[1100px] border-collapse text-left">
-        <thead className="sticky top-0 z-10 bg-[#233241] text-white">
+    <div className="planner-grid-shell overflow-x-hidden overflow-y-auto rounded-[28px] border border-[var(--line)] bg-[var(--panel-elevated)]">
+      <table className="w-full table-fixed border-collapse text-left">
+        <colgroup>
+          <col className="w-36" />
+          {rooms.map((room) => (
+            <col key={room.id} style={{ width: roomColumnWidth }} />
+          ))}
+        </colgroup>
+        <thead className="planner-grid-head sticky top-0 z-10 text-white">
           <tr>
-            <th className="w-44 border-b border-slate-800 px-4 py-4 text-xs uppercase tracking-[0.18em] text-slate-300">
+            <th className="border-b border-white/10 px-3 py-4 text-xs uppercase tracking-[0.18em] text-white/72">
               {t("Date")}
             </th>
             {rooms.map((room) => (
-              <th key={room.id} className="min-w-64 border-b border-slate-800 px-4 py-4">
-                <div className="text-sm font-semibold">{room.name}</div>
-                <div className="text-xs text-slate-300">
-                  {room.code} | {room.location}
+              <th key={room.id} className="border-b border-white/10 px-2 py-3 align-top">
+                <div className="text-sm font-semibold leading-5 text-white">{room.name}</div>
+                <div className="mt-1 break-words text-[11px] leading-4 text-white/68">
+                  {room.code}
+                  <span className="mx-1">|</span>
+                  {room.location}
                 </div>
               </th>
             ))}
@@ -59,25 +68,25 @@ export function PlannerGrid({
               >
                 <td
                   className={cn(
-                    "border-b border-r border-slate-200 px-4 py-4",
-                    today && "bg-[rgba(37,87,229,0.14)]",
-                    (weekend || holiday) && !today && "bg-sand"
+                    "border-b border-r border-[var(--line)] px-3 py-4",
+                    today && "planner-grid-today-side",
+                    (weekend || holiday) && !today && "planner-grid-muted-side"
                   )}
                 >
                   <div className="flex items-center gap-2">
                     <div>
-                      <div className="text-sm font-semibold text-slate-900">
+                      <div className="text-sm font-semibold text-[var(--ink)]">
                         {new Intl.DateTimeFormat(language === "ar" ? "ar-SA" : "en-US", { weekday: "short" }).format(date)}
                       </div>
-                      <div className="text-2xl font-semibold tracking-tight text-slate-950">
+                      <div className="text-2xl font-semibold tracking-tight text-[var(--ink)]">
                         {new Intl.DateTimeFormat(language === "ar" ? "ar-SA" : "en-US", { day: "2-digit" }).format(date)}
                       </div>
                     </div>
-                      <div className="text-xs uppercase tracking-[0.14em] text-slate-500">
+                      <div className="text-xs uppercase tracking-[0.14em] text-[var(--muted)]">
                         {new Intl.DateTimeFormat(language === "ar" ? "ar-SA" : "en-US", { month: "short", year: "numeric" }).format(date)}
                         {today ? <div className="mt-1 text-brand-700">{t("Today")}</div> : null}
                       {holiday ? <div className="mt-1 text-amber-700">{blockedDay?.label || t("Blocked")}</div> : null}
-                      {weekend ? <div className="mt-1 text-slate-500">{t("Weekend")}</div> : null}
+                      {weekend ? <div className="mt-1 text-[var(--muted)]">{t("Weekend")}</div> : null}
                     </div>
                   </div>
                 </td>
@@ -87,14 +96,14 @@ export function PlannerGrid({
                     <td
                       key={`${room.id}-${toDateKey(date)}`}
                       className={cn(
-                        "border-b border-r border-slate-200 px-3 py-3",
-                        today && "bg-[rgba(37,87,229,0.07)]",
-                        (weekend || holiday) && !today && "bg-slate-50/90"
+                        "border-b border-r border-[var(--line)] px-2 py-2.5",
+                        today && "planner-grid-today-cell",
+                        (weekend || holiday) && !today && "planner-grid-muted-cell"
                       )}
                     >
-                      <div className="flex min-h-24 flex-col gap-2">
+                      <div className="flex min-h-24 flex-col gap-1.5">
                         {items.length === 0 ? (
-                          <div className="rounded-2xl border border-dashed border-slate-200 px-3 py-5 text-center text-xs text-slate-400">
+                          <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--panel-soft)] px-2 py-5 text-center text-[11px] text-[var(--muted)]">
                             {t("No bookings")}
                           </div>
                         ) : (

@@ -59,7 +59,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       email: uniqueness.email,
       phoneNumber: uniqueness.phoneNumber,
       managerId: parsed.data.role === "STANDARD" ? parsed.data.managerId || null : null,
-      role: parsed.data.role as "ADMIN" | "MANAGER" | "STANDARD",
+      role: parsed.data.role as "ADMIN" | "MANAGER" | "STANDARD" | "SERVICE",
       status: parsed.data.status,
       ...(parsed.data.password ? { passwordHash: hashPassword(parsed.data.password) } : {})
     }

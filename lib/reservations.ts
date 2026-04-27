@@ -483,3 +483,47 @@ export async function sendManagerApprovalRequestEmail(params: {
     html
   });
 }
+
+export async function sendRoomShiftNotificationEmail(params: {
+  reservation: ReturnType<typeof serializeReservation>;
+  previousRoomName: string;
+  reason: string;
+}) {
+  if (!isEmailConfigured()) {
+    return;
+  }
+
+  const reservation = params.reservation;
+  const text = [
+    "Room reservation updated",
+    "",
+    `Meeting title: ${reservation.guestCompany}`,
+    `New room: ${reservation.room.name}`,
+    `Previous room: ${params.previousRoomName}`,
+    `Dates: ${reservation.reservationDate.slice(0, 10)} to ${reservation.reservationEndDate.slice(0, 10)}`,
+    `Time: ${reservation.startTime} - ${reservation.endTime}`,
+    `Reason for room change: ${params.reason}`,
+    "",
+    "Please use the updated room for this reservation."
+  ].join("\n");
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.6;">
+      <h2 style="margin-bottom: 12px;">Room reservation updated</h2>
+      <p><strong>Meeting title:</strong> ${reservation.guestCompany}</p>
+      <p><strong>New room:</strong> ${reservation.room.name}</p>
+      <p><strong>Previous room:</strong> ${params.previousRoomName}</p>
+      <p><strong>Dates:</strong> ${reservation.reservationDate.slice(0, 10)} to ${reservation.reservationEndDate.slice(0, 10)}</p>
+      <p><strong>Time:</strong> ${reservation.startTime} - ${reservation.endTime}</p>
+      <p><strong>Reason for room change:</strong> ${params.reason}</p>
+      <p>Please use the updated room for this reservation.</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: [reservation.requesterEmail],
+    subject: `Room changed: ${reservation.guestCompany} now in ${reservation.room.name}`,
+    text,
+    html
+  });
+}

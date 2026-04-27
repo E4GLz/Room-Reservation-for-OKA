@@ -86,6 +86,7 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
     <div className="space-y-6 px-8 py-6">
       <div className="flex justify-end">
         <Button
+          className="dark-mode-white-button"
           onClick={() => {
             setEditingUser(null);
             setForm(initialForm());
@@ -147,6 +148,7 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
               >
                 <option value={UserRole.ADMIN}>{t("Admin")}</option>
                 <option value="MANAGER">{t("Manager")}</option>
+                <option value="SERVICE">{t("Service")}</option>
                 <option value={UserRole.STANDARD}>{t("Staff")}</option>
               </Select>
             </div>
@@ -185,7 +187,7 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
               }}>
                 {t("Cancel")}
               </Button>
-              <Button type="submit" disabled={saving}>
+              <Button type="submit" disabled={saving} className="dark-mode-white-button">
                 {saving ? t("Saving...") : editingUser ? t("Update user") : t("Create user")}
               </Button>
             </div>

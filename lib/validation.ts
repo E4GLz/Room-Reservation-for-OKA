@@ -1,4 +1,4 @@
-import { BookingStatus, RoomStatus, UserRole, UserStatus } from "@prisma/client";
+import { BookingStatus, DrinkOrderStatus, RoomStatus, UserRole, UserStatus } from "@prisma/client";
 import { z } from "zod";
 import { RESERVATION_TYPES } from "@/lib/constants";
 
@@ -63,7 +63,7 @@ export const userSchema = z.object({
   phoneNumber: z.string().max(40).optional().or(z.literal("")),
   password: z.string().min(6).max(120).optional().or(z.literal("")),
   managerId: z.string().optional().or(z.literal("")),
-  role: z.enum(["ADMIN", "MANAGER", "STANDARD"]),
+  role: z.enum(["ADMIN", "MANAGER", "STANDARD", "SERVICE"]),
   status: z.nativeEnum(UserStatus)
 });
 
@@ -105,3 +105,48 @@ export const settingsSchema = z
     path: ["workWeekEnd"],
     message: "Workweek start and end must be different days."
   });
+
+export const menuModifierSchema = z.object({
+  id: z.string().optional(),
+  label: z.string().min(1).max(80),
+  labelArabic: z.string().max(80).optional().or(z.literal("")),
+  isActive: z.boolean().default(true),
+  sortOrder: z.coerce.number().int().min(0).max(999).default(0)
+});
+
+export const menuItemSchema = z.object({
+  name: z.string().min(2).max(120),
+  nameArabic: z.string().max(120).optional().or(z.literal("")),
+  category: z.string().min(2).max(80),
+  description: z.string().max(240).optional().or(z.literal("")),
+  descriptionArabic: z.string().max(240).optional().or(z.literal("")),
+  imageAttachment: z.string().max(240).optional().or(z.literal("")),
+  isActive: z.boolean(),
+  isOutOfStock: z.boolean(),
+  allowCustomNote: z.boolean(),
+  sortOrder: z.coerce.number().int().min(0).max(999),
+  modifiers: z.array(menuModifierSchema).max(20)
+});
+
+export const guestDrinkOrderItemSchema = z.object({
+  menuItemId: z.string().min(1),
+  selectedModifierIds: z.array(z.string()).max(10),
+  customNote: z.string().max(240).optional().or(z.literal(""))
+});
+
+export const guestDrinkOrderSchema = z.union([
+  z.object({
+    guestLabel: z.string().max(80).optional().or(z.literal("")),
+    menuItemId: z.string().min(1),
+    selectedModifierIds: z.array(z.string()).max(10),
+    customNote: z.string().max(240).optional().or(z.literal(""))
+  }),
+  z.object({
+    guestLabel: z.string().max(80).optional().or(z.literal("")),
+    items: z.array(guestDrinkOrderItemSchema).min(1).max(8)
+  })
+]);
+
+export const drinkOrderStatusSchema = z.object({
+  status: z.nativeEnum(DrinkOrderStatus)
+});

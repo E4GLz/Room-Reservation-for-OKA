@@ -134,6 +134,12 @@ export function BookingForm({
   const selectedRoom = useMemo(() => rooms.find((room) => room.id === form.roomId), [form.roomId, rooms]);
   const adminManaged = user?.role === UserRole.ADMIN;
   const submitLabel = reservation ? t("Save changes") : t(adminManaged ? "Create booking" : "Request booking");
+  const foodServiceSelection =
+    form.foodServiceRequired === null
+      ? ""
+      : form.foodServiceRequired
+        ? "yes"
+        : "no";
 
   function getErrorMessage(payload: unknown) {
     if (typeof payload === "string") {
@@ -434,13 +440,7 @@ export function BookingForm({
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">{t("Room for food service?")}</label>
             <Select
-              value={
-                form.foodServiceRequired === null
-                  ? ""
-                  : form.foodServiceRequired
-                    ? "yes"
-                    : "no"
-              }
+              value={foodServiceSelection}
               required
               onChange={(event) =>
                 setForm({
@@ -454,7 +454,7 @@ export function BookingForm({
                 })
               }
             >
-              <option value="" disabled>
+              <option value="" hidden>
                 {t("Select food service option")}
               </option>
               <option value="no">{t("No")}</option>
@@ -465,7 +465,7 @@ export function BookingForm({
           {form.foodServiceRequired ? (
             <div className="space-y-3">
               <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {t("Room for food service will be reserved. Please request food from Obeikan Knowledge Academy HR > Self Service > Food Service.")}
+                {t("Room for food service will be reserved. Please request food from Nawras HR > Self Service > Food Service.")}
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">{t("Food service room or location")} *</label>

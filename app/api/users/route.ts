@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       phoneNumber: uniqueness.phoneNumber,
       managerId: parsed.data.role === "STANDARD" ? parsed.data.managerId || null : null,
       passwordHash: hashPassword(parsed.data.password),
-      role: parsed.data.role as "ADMIN" | "MANAGER" | "STANDARD",
+      role: parsed.data.role as "ADMIN" | "MANAGER" | "STANDARD" | "SERVICE",
       status: parsed.data.status
     }
   });

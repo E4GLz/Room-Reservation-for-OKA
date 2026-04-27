@@ -12,6 +12,7 @@ enum UserRole {
   ADMIN
   MANAGER
   STANDARD
+  SERVICE
 }
 
 enum RoomStatus {
@@ -35,6 +36,13 @@ enum ManagerApprovalStatus {
 enum UserStatus {
   ACTIVE
   INACTIVE
+}
+
+enum DrinkOrderStatus {
+  NEW
+  PREPARING
+  SERVED
+  CANCELLED
 }
 
 model User {
@@ -88,6 +96,8 @@ model Room {
   notes        String?
   status       RoomStatus    @default(ACTIVE)
   reservations Reservation[]
+  serviceToken RoomServiceToken?
+  drinkOrders  DrinkOrder[]
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 }
@@ -129,6 +139,7 @@ model Reservation {
   room              Room              @relation(fields: [roomId], references: [id])
   manager           User?             @relation("ReservationManager", fields: [managerId], references: [id])
   auditEntries      ReservationAudit[]
+  drinkOrders       DrinkOrder[]
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt
 
@@ -159,4 +170,76 @@ model StoredFile {
   size         Int
   bytes        Bytes
   createdAt    DateTime @default(now())
+}
+
+model RoomServiceToken {
+  id         String   @id @default(cuid())
+  roomId      String   @unique
+  token       String   @unique
+  isEnabled   Boolean  @default(true)
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  drinkOrders DrinkOrder[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model MenuItem {
+  id               String             @id @default(cuid())
+  name             String
+  nameArabic       String?
+  category         String
+  description      String?
+  descriptionArabic String?
+  imageAttachment  String?
+  isActive         Boolean            @default(true)
+  isOutOfStock     Boolean            @default(false)
+  allowCustomNote  Boolean            @default(true)
+  sortOrder        Int                @default(0)
+  modifiers        MenuItemModifier[]
+  drinkOrders      DrinkOrder[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([category, sortOrder])
+}
+
+model MenuItemModifier {
+  id         String   @id @default(cuid())
+  menuItemId String
+  label      String
+  labelArabic String?
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([menuItemId, sortOrder])
+}
+
+model DrinkOrder {
+  id                 String           @id @default(cuid())
+  reservationId      String?
+  roomId             String
+  roomServiceTokenId String?
+  menuItemId         String
+  guestLabel         String?
+  itemNameSnapshot   String
+  modifierSummary    String?
+  customNote         String?
+  status             DrinkOrderStatus @default(NEW)
+  submittedAt        DateTime         @default(now())
+  preparingAt        DateTime?
+  servedAt           DateTime?
+  guestReminderRequestedAt DateTime?
+  reservation        Reservation?     @relation(fields: [reservationId], references: [id], onDelete: SetNull)
+  room               Room             @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  roomServiceToken   RoomServiceToken? @relation(fields: [roomServiceTokenId], references: [id], onDelete: SetNull)
+  menuItem           MenuItem         @relation(fields: [menuItemId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([roomId, submittedAt])
+  @@index([reservationId, status])
+  @@index([status, submittedAt])
 }

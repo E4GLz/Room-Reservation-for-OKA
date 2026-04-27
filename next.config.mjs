@@ -2,7 +2,6 @@
 const nextConfig = {
   output: "standalone",
   typedRoutes: true,
-  generateStaticParams: false,
   // Force all pages to be dynamic globally
   experimental: {
     ppr: false,

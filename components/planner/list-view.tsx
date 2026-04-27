@@ -18,20 +18,20 @@ export function PlannerListView({ reservations }: { reservations: ReservationRec
   return (
     <div className="space-y-3">
       {reservations.map((reservation) => (
-        <div key={reservation.id} className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
+        <div key={reservation.id} className="rounded-[24px] border border-[var(--line)] bg-[var(--panel-elevated)] p-4 shadow-sm">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               {canUserViewReservationDetails(reservation, user) ? (
                 <>
-                  <p className="text-sm font-semibold text-slate-950">{reservation.guestCompany}</p>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm font-semibold text-[var(--ink)]">{reservation.guestCompany}</p>
+                  <p className="text-sm text-[var(--muted)]">
                     {reservation.room.name} | {reservation.chargedDepartment} | {formatLongDate(reservation.reservationDate)}
                   </p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-semibold text-slate-950">{reservation.room.name}</p>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm font-semibold text-[var(--ink)]">{reservation.room.name}</p>
+                  <p className="text-sm text-[var(--muted)]">
                     {t("Blocked")} | {formatLongDate(reservation.reservationDate)}
                   </p>
                 </>

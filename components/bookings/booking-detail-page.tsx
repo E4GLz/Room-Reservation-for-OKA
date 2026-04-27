@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import { CheckCircle2, Clock3, Download, PencilLine, ShieldCheck, UserRound, XCircle } from "lucide-react";
 import { BookingStatus, UserRole } from "@prisma/client";
 import { BookingForm } from "@/components/bookings/booking-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
 import { parseStoredAttachments } from "@/lib/attachments";
@@ -47,6 +49,27 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
     user?.role === UserRole.ADMIN &&
     reservation.bookingStatus === BookingStatus.PENDING &&
     (reservation.createdByRole !== UserRole.STANDARD || reservation.managerApprovalStatus !== "PENDING");
+  const moveRoomTypes = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          rooms
+            .filter((room) => room.status === "ACTIVE")
+            .map((room) => room.type)
+        )
+      ),
+    [rooms]
+  );
+  const [moveReservationType, setMoveReservationType] = useState(reservation.reservationType);
+  const [moveRoomId, setMoveRoomId] = useState("");
+  const [moveReason, setMoveReason] = useState("");
+  const [moveSaving, setMoveSaving] = useState(false);
+  const [moveError, setMoveError] = useState("");
+  const [moveSuccess, setMoveSuccess] = useState("");
+  const availableMoveRooms = useMemo(
+    () => rooms.filter((room) => room.status === "ACTIVE" && room.type === moveReservationType && room.id !== reservation.roomId),
+    [moveReservationType, reservation.roomId, rooms]
+  );
 
   if (!canView) {
     return (
@@ -117,6 +140,44 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
       return;
     }
 
+    router.refresh();
+  }
+
+  async function handleMoveReservation() {
+    if (!moveRoomId || !moveReason.trim()) {
+      setMoveError(t("Please select the new room and provide the reason for the room change."));
+      setMoveSuccess("");
+      return;
+    }
+
+    setMoveSaving(true);
+    setMoveError("");
+    setMoveSuccess("");
+
+    const response = await fetch(`/api/reservations/${reservation.id}/move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        roomId: moveRoomId,
+        reservationType: moveReservationType,
+        reason: moveReason
+      })
+    });
+
+    if (!response.ok) {
+      setMoveError(await readErrorMessage(response, t("Unable to move reservation.")));
+      setMoveSaving(false);
+      return;
+    }
+
+    const payload = (await response.json()) as { emailWarning?: string | null };
+    setMoveSuccess(
+      payload.emailWarning
+        ? `${t("Reservation moved successfully.")} ${t("Email warning")}: ${payload.emailWarning}`
+        : t("Reservation moved successfully and the requester was notified.")
+    );
+    setMoveReason("");
+    setMoveSaving(false);
     router.refresh();
   }
 
@@ -213,6 +274,73 @@ export function BookingDetailPage(props: BookingDetailPageProps) {
           ) : null}
         </div>
       </Card>
+
+      {canEdit ? (
+        <Card className="rounded-[28px]">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-950">{t("Move reservation to another room")}</h3>
+              <p className="mt-1 text-sm text-slate-600">
+                {t("Use this when the meeting must be reassigned to another room. The requester will receive an email with the reason for the change.")}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1fr_1.2fr_auto]">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("New reservation type")}</label>
+              <select
+                value={moveReservationType}
+                onChange={(event) => {
+                  const nextType = event.target.value;
+                  setMoveReservationType(nextType);
+                  setMoveRoomId("");
+                }}
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              >
+                {moveRoomTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {t(type)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("New room")}</label>
+              <select
+                value={moveRoomId}
+                onChange={(event) => setMoveRoomId(event.target.value)}
+                className="w-full rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-3 py-2.5 text-sm text-[var(--ink)] outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
+              >
+                <option value="">{t("Select a room")}</option>
+                {availableMoveRooms.map((room) => (
+                  <option key={room.id} value={room.id}>
+                    {room.code} - {room.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">{t("Reason for room change")}</label>
+              <Textarea value={moveReason} onChange={(event) => setMoveReason(event.target.value)} />
+            </div>
+
+            <div className="flex items-end">
+              <Button type="button" disabled={moveSaving || availableMoveRooms.length === 0} onClick={() => void handleMoveReservation()}>
+                {moveSaving ? t("Saving...") : t("Move reservation")}
+              </Button>
+            </div>
+          </div>
+
+          {availableMoveRooms.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-500">{t("No other active rooms are available under the selected reservation type.")}</p>
+          ) : null}
+          {moveError ? <div className="mt-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{moveError}</div> : null}
+          {moveSuccess ? <div className="mt-4 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{moveSuccess}</div> : null}
+        </Card>
+      ) : null}
 
       {canEdit ? (
         <BookingForm

@@ -80,6 +80,17 @@ export function PlannerPage({
     () => rooms.filter((room) => !filters.roomId || room.id === filters.roomId),
     [filters.roomId, rooms]
   );
+
+  useEffect(() => {
+    setView(initialView);
+  }, [initialView]);
+
+  useEffect(() => {
+    if (initialDate) {
+      setBaseDate(fromInputDate(initialDate));
+    }
+  }, [initialDate]);
+
   useEffect(() => {
     if (!scrollTargetDate) {
       return;
@@ -111,7 +122,19 @@ export function PlannerPage({
     const nextDate = fromInputDate(value);
     setBaseDate(nextDate);
     setScrollTargetDate(value);
-    router.replace(`/planner?date=${value}&view=${view}`);
+    router.replace(`/planner?date=${value}&view=${view}`, { scroll: false });
+  }
+
+  function navigateByOffset(direction: "prev" | "next") {
+    const nextDate = shiftDateByView(baseDate, view === "list" ? "month" : view, direction);
+    const nextDateValue = toInputDate(nextDate);
+    setBaseDate(nextDate);
+    router.replace(`/planner?date=${nextDateValue}&view=${view}`, { scroll: false });
+  }
+
+  function changeView(nextView: PlannerView) {
+    setView(nextView);
+    router.replace(`/planner?date=${toInputDate(baseDate)}&view=${nextView}`, { scroll: false });
   }
 
   return (
@@ -123,7 +146,7 @@ export function PlannerPage({
         actions={
           user ? (
             <Link href="/bookings/new">
-              <Button>
+              <Button className="!bg-white !text-slate-950 hover:!bg-white/90">
                 <CalendarPlus2 className="mr-2 h-4 w-4" />
                 {t(user.role === "ADMIN" ? "Create booking" : "Request booking")}
               </Button>
@@ -133,10 +156,10 @@ export function PlannerPage({
       />
 
       <div className="space-y-6 px-8 py-6">
-        <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(237,243,255,0.82))]">
+        <Card className="planner-toolbar-card">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3">
-              <Button variant="ghost" onClick={() => setBaseDate(shiftDateByView(baseDate, view === "list" ? "month" : view, "prev"))}>
+              <Button variant="ghost" onClick={() => navigateByOffset("prev")}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div>
@@ -147,16 +170,16 @@ export function PlannerPage({
                   {formatLongDate(visibleDates[visibleDates.length - 1])}
                 </p>
               </div>
-              <Button variant="ghost" onClick={() => setBaseDate(shiftDateByView(baseDate, view === "list" ? "month" : view, "next"))}>
+              <Button variant="ghost" onClick={() => navigateByOffset("next")}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <input
                 type="date"
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                className="rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-3 py-2.5 text-sm text-[var(--ink)]"
                 value={toInputDate(baseDate)}
                 onChange={(event) => jumpToDate(event.target.value)}
               />
-              <Button variant="secondary" onClick={() => jumpToDate(toInputDate(new Date()))}>
+              <Button variant="secondary" className="!bg-white !text-slate-950 hover:!bg-white/90" onClick={() => jumpToDate(toInputDate(new Date()))}>
                 <Crosshair className="mr-2 h-4 w-4" />
                 {t("Jump to today")}
               </Button>
@@ -166,10 +189,8 @@ export function PlannerPage({
                 <Button
                   key={item.value}
                   variant={item.value === view ? "primary" : "ghost"}
-                  onClick={() => {
-                    setView(item.value);
-                    router.replace(`/planner?date=${toInputDate(baseDate)}&view=${item.value}`);
-                  }}
+                  className={item.value === view ? "planner-view-button-active" : "planner-view-button"}
+                  onClick={() => changeView(item.value)}
                 >
                   {t(item.label)}
                 </Button>
