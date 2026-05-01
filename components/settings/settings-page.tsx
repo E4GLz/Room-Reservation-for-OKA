@@ -149,7 +149,8 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
               </div>
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
+                className="dark-mode-white-button"
                 onClick={() =>
                   setForm((current) => ({
                     ...current,
@@ -224,7 +225,7 @@ export function SettingsPage({ settings }: { settings: AppSettingsRecord }) {
           {error ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
 
           <div className="flex justify-end">
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving} className="dark-mode-white-button">
               {saving ? t("Saving...") : t("Save settings")}
             </Button>
           </div>

@@ -1,18 +1,20 @@
 import { NextResponse } from "next/server";
 import { hashPassword, verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/server-auth";
 import { validateUniqueUserIdentity } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { profileSchema } from "@/lib/validation";
 export const dynamic = 'force-dynamic';
 
 export async function PUT(request: Request) {
-  const body = await request.json();
-  const id = body.id as string | undefined;
-
-  if (!id) {
-    return NextResponse.json({ error: "User id is required." }, { status: 400 });
+  const auth = await requireApiUser();
+  if (auth.response || !auth.user) {
+    return auth.response;
   }
+
+  const body = await request.json();
+  const id = auth.user.id;
 
   const parsed = profileSchema.safeParse(body);
   if (!parsed.success) {

@@ -7,7 +7,7 @@ export function Badge({ label, tone }: { label: string; tone?: string }) {
   const { t } = useLanguage();
 
   return (
-    <span className={cn("inline-flex rounded-full px-2.5 py-1 text-xs font-medium ring-1 ring-inset", tone ?? getStatusTone(label))}>
+    <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium leading-5 ring-1 ring-inset", tone ?? getStatusTone(label))}>
       {t(label)}
     </span>
   );

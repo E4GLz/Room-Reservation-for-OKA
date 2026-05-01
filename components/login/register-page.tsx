@@ -8,8 +8,10 @@ import { ArrowRight, BadgeCheck, KeyRound, UserPlus2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { useLanguage } from "@/components/providers/language-provider";
 import { readErrorMessage, extractFlattenedFormError } from "@/lib/client-errors";
+import { combinePhoneNumber, COUNTRY_CODE_OPTIONS } from "@/lib/phone";
 
 const valuePoints = [
   "Access the live room schedule",
@@ -23,7 +25,8 @@ export function RegisterPage() {
   const [form, setForm] = useState({
     name: "",
     email: "",
-    phoneNumber: "",
+    countryCode: "+966",
+    localPhoneNumber: "",
     password: "",
     confirmPassword: ""
   });
@@ -57,7 +60,13 @@ export function RegisterPage() {
       const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form)
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          phoneNumber: combinePhoneNumber(form.countryCode, form.localPhoneNumber),
+          password: form.password,
+          confirmPassword: form.confirmPassword
+        })
       });
 
       if (!response.ok) {
@@ -138,7 +147,21 @@ export function RegisterPage() {
             </div>
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">{t("Phone number")}</label>
-              <Input value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} />
+              <div className="grid gap-3 sm:grid-cols-[170px_1fr]">
+                <Select value={form.countryCode} onChange={(event) => setForm({ ...form, countryCode: event.target.value })}>
+                  {COUNTRY_CODE_OPTIONS.map((option) => (
+                    <option key={option.code} value={option.code}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  inputMode="tel"
+                  value={form.localPhoneNumber}
+                  onChange={(event) => setForm({ ...form, localPhoneNumber: event.target.value.replace(/[^\d]/g, "") })}
+                  placeholder={t("Local phone number")}
+                />
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>

@@ -1,15 +1,13 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
 import { NextResponse } from "next/server";
-
-const uploadRoot = path.join(process.cwd(), "public", "uploads", "bookings");
-
-function sanitizeFileName(fileName: string) {
-  return fileName.replace(/[^a-zA-Z0-9._-]/g, "-");
-}
+import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/server-auth";
 
 export async function POST(request: Request) {
+  const auth = await requireApiUser();
+  if (auth.response) {
+    return auth.response;
+  }
+
   const formData = await request.formData();
   const kind = String(formData.get("kind") || "files");
   const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
@@ -18,23 +16,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No files uploaded." }, { status: 400 });
   }
 
-  const targetDirectory = path.join(uploadRoot, kind);
-  await mkdir(targetDirectory, { recursive: true });
-
   const uploaded = [];
+  const prismaWithStoredFile = prisma as typeof prisma & {
+    storedFile: {
+      create: typeof prisma.$transaction extends never
+        ? never
+        : (args: {
+            data: {
+              kind: string;
+              originalName: string;
+              contentType: string | null;
+              size: number;
+              bytes: Buffer;
+            };
+          }) => Promise<{ id: string }>;
+    };
+  };
 
   for (const file of files) {
-    const extension = path.extname(file.name);
-    const baseName = path.basename(file.name, extension);
-    const safeFileName = `${sanitizeFileName(baseName)}-${randomUUID()}${extension}`;
-    const outputPath = path.join(targetDirectory, safeFileName);
     const buffer = Buffer.from(await file.arrayBuffer());
-
-    await writeFile(outputPath, buffer);
+    const stored = await prismaWithStoredFile.storedFile.create({
+      data: {
+        kind,
+        originalName: file.name,
+        contentType: file.type || null,
+        size: buffer.length,
+        bytes: buffer
+      }
+    });
 
     uploaded.push({
       name: file.name,
-      url: `/uploads/bookings/${kind}/${safeFileName}`,
+      url: `/api/uploads/${stored.id}`,
       contentType: file.type || null
     });
   }

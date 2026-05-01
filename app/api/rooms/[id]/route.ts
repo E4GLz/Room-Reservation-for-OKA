@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole } from "@/lib/server-auth";
 import { roomSchema } from "@/lib/validation";
 export const dynamic = 'force-dynamic';
 
@@ -26,6 +27,11 @@ function getRoomErrorMessage(error: unknown) {
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   try {
     const { id } = await params;
     const body = await request.json();

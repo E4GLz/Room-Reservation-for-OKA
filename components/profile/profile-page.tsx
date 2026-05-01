@@ -5,17 +5,22 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { StatePanel } from "@/components/ui/state-panel";
+import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
 import { readErrorMessage } from "@/lib/client-errors";
+import { combinePhoneNumber, COUNTRY_CODE_OPTIONS, splitPhoneNumber } from "@/lib/phone";
 
 export function ProfilePage() {
   const router = useRouter();
+  const { t } = useLanguage();
   const { user, updateSessionUser, logout, isReady } = useSession();
   const [form, setForm] = useState({
     name: "",
     email: "",
-    phoneNumber: "",
+    countryCode: "+966",
+    localPhoneNumber: "",
     currentPassword: "",
     newPassword: ""
   });
@@ -31,12 +36,12 @@ export function ProfilePage() {
       ...current,
       name: user.name,
       email: user.email,
-      phoneNumber: user.phoneNumber ?? ""
+      ...splitPhoneNumber(user.phoneNumber)
     }));
   }, [user]);
 
   if (isReady && !user) {
-    return <StatePanel title="Sign in required" message="Please sign in to view and update your profile settings." />;
+    return <StatePanel title={t("Sign in required")} message={t("Please sign in to view and update your profile settings.")} />;
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -53,13 +58,16 @@ export function ProfilePage() {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: user.id,
-          ...form
+          name: form.name,
+          email: form.email,
+          phoneNumber: combinePhoneNumber(form.countryCode, form.localPhoneNumber),
+          currentPassword: form.currentPassword,
+          newPassword: form.newPassword
         })
       });
 
       if (!response.ok) {
-        setError(await readErrorMessage(response, "Unable to update profile."));
+        setError(await readErrorMessage(response, t("Unable to update profile.")));
         setSaving(false);
         return;
       }
@@ -69,7 +77,7 @@ export function ProfilePage() {
       setSaving(false);
       setForm((current) => ({ ...current, currentPassword: "", newPassword: "" }));
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Unable to update profile.");
+      setError(submitError instanceof Error ? submitError.message : t("Unable to update profile."));
       setSaving(false);
     }
   }
@@ -79,23 +87,37 @@ export function ProfilePage() {
       <Card>
         <form className="grid gap-4 lg:grid-cols-2" onSubmit={handleSubmit}>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Full name</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Full name")}</label>
             <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Email</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Email")}</label>
             <Input type="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Phone number</label>
-            <Input value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} />
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Phone number")}</label>
+            <div className="grid gap-3 sm:grid-cols-[170px_1fr]">
+              <Select value={form.countryCode} onChange={(event) => setForm({ ...form, countryCode: event.target.value })}>
+                {COUNTRY_CODE_OPTIONS.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                inputMode="tel"
+                value={form.localPhoneNumber}
+                onChange={(event) => setForm({ ...form, localPhoneNumber: event.target.value.replace(/[^\d]/g, "") })}
+                placeholder={t("Local phone number")}
+              />
+            </div>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">Current password</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Current password")}</label>
             <Input type="password" value={form.currentPassword} onChange={(event) => setForm({ ...form, currentPassword: event.target.value })} />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">New password</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("New password")}</label>
             <Input type="password" value={form.newPassword} onChange={(event) => setForm({ ...form, newPassword: event.target.value })} />
           </div>
           {error ? <div className="lg:col-span-2 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
@@ -103,15 +125,16 @@ export function ProfilePage() {
             <Button
               type="button"
               variant="ghost"
-              onClick={() => {
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" }).catch(() => null);
                 logout();
                 router.push("/login");
               }}
             >
-              Sign out
+              {t("Sign out")}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Saving..." : "Save profile"}
+              {saving ? t("Saving...") : t("Save profile")}
             </Button>
           </div>
         </form>

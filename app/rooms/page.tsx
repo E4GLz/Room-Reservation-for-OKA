@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { RoomsPage } from "@/components/rooms/rooms-page";
 import { prisma } from "@/lib/prisma";
+import { requireAdminPageUser } from "@/lib/server-auth";
 export const dynamic = 'force-dynamic';
 
 async function getRooms() {
@@ -10,6 +11,7 @@ async function getRooms() {
 }
 
 export default async function Rooms() {
+  await requireAdminPageUser();
   const rooms = await getRooms();
 
   return (

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowUpRight, CalendarClock, CheckCheck, CircleOff, TimerReset } from "lucide-react";
 import { BookingStatus } from "@prisma/client";
 import { Card } from "@/components/ui/card";
@@ -18,9 +19,11 @@ import type { ReservationRecord } from "@/lib/types";
 export function MyBookingsPage() {
   const { t } = useLanguage();
   const { user, isReady } = useSession();
+  const searchParams = useSearchParams();
   const [reservations, setReservations] = useState<ReservationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const requestSubmitted = searchParams.get("requestSubmitted") === "1";
 
   useEffect(() => {
     if (!isReady) {
@@ -79,6 +82,12 @@ export function MyBookingsPage() {
 
   return (
     <div className="space-y-6 px-8 py-6">
+      {requestSubmitted ? (
+        <div className="rounded-[20px] border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {t("Your booking request was submitted successfully.")}
+        </div>
+      ) : null}
+
       <div className="grid gap-4 xl:grid-cols-4">
         <KpiCard label={t("Your total bookings")} value={sortedReservations.length} icon={<CalendarClock className="h-5 w-5" />} tone="accent" />
         <KpiCard label={t("Confirmed")} value={confirmedCount} icon={<CheckCheck className="h-5 w-5" />} tone="soft" />

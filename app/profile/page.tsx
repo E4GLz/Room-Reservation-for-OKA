@@ -1,7 +1,9 @@
 import { ProfilePage } from "@/components/profile/profile-page";
 import { PageHeader } from "@/components/ui/page-header";
+import { requireAuthenticatedPageUser } from "@/lib/server-auth";
 
-export default function Profile() {
+export default async function Profile() {
+  await requireAuthenticatedPageUser();
   return (
     <>
       <PageHeader

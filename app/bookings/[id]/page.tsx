@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { BookingDetailPage } from "@/components/bookings/booking-detail-page";
 import { PageHeader } from "@/components/ui/page-header";
 import { prisma } from "@/lib/prisma";
+import { requireAuthenticatedPageUser } from "@/lib/server-auth";
 import { ReservationRecord } from "@/lib/types";
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,9 @@ async function getReservation(id: string) {
     },
   });
 
-
+  if (!reservationRaw) {
+    return null;
+  }
 
   reservationRaw.room.createdAt;
   const reservation: ReservationRecord = {
@@ -36,6 +39,7 @@ export default async function BookingDetail({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAuthenticatedPageUser();
   const { id } = await params;
   const [reservation, rooms] = await Promise.all([
     getReservation(id),

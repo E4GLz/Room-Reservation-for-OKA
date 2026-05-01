@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CalendarPlus2, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarPlus2, ChevronLeft, ChevronRight, Crosshair } from "lucide-react";
 import { useLanguage } from "@/components/providers/language-provider";
+import { useSession } from "@/components/providers/session-provider";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PlannerFilters } from "@/components/planner/planner-filters";
@@ -37,8 +38,7 @@ export function PlannerPage({
   settings,
   initialView = "month",
   initialDate,
-  initialFilters,
-  historySummary
+  initialFilters
 }: {
   reservations: ReservationRecord[];
   rooms: RoomRecord[];
@@ -46,16 +46,13 @@ export function PlannerPage({
   initialView?: PlannerView;
   initialDate?: string;
   initialFilters?: FilterState;
-  historySummary: {
-    totalReservations: number;
-    earliestDate: string | null;
-    latestDate: string | null;
-  };
 }) {
   const router = useRouter();
   const { t } = useLanguage();
+  const { user } = useSession();
   const [view, setView] = useState<PlannerView>(initialView);
   const [baseDate, setBaseDate] = useState<Date>(initialDate ? fromInputDate(initialDate) : new Date());
+  const [scrollTargetDate, setScrollTargetDate] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>(
     initialFilters ?? {
       roomId: "",
@@ -83,11 +80,39 @@ export function PlannerPage({
     () => rooms.filter((room) => !filters.roomId || room.id === filters.roomId),
     [filters.roomId, rooms]
   );
-  const showHistoryCard =
-    historySummary.totalReservations > 0 &&
-    historySummary.earliestDate &&
-    historySummary.latestDate &&
-    historySummary.earliestDate !== historySummary.latestDate;
+
+  useEffect(() => {
+    setView(initialView);
+  }, [initialView]);
+
+  useEffect(() => {
+    if (initialDate) {
+      setBaseDate(fromInputDate(initialDate));
+    }
+  }, [initialDate]);
+
+  useEffect(() => {
+    if (!scrollTargetDate) {
+      return;
+    }
+
+    const targetId = `planner-date-${scrollTargetDate}`;
+    let frame = 0;
+
+    const scrollToTarget = () => {
+      const element = document.getElementById(targetId);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        setScrollTargetDate(null);
+        return;
+      }
+
+      frame = window.requestAnimationFrame(scrollToTarget);
+    };
+
+    frame = window.requestAnimationFrame(scrollToTarget);
+    return () => window.cancelAnimationFrame(frame);
+  }, [scrollTargetDate, view]);
 
   function jumpToDate(value: string | null) {
     if (!value) {
@@ -96,7 +121,20 @@ export function PlannerPage({
 
     const nextDate = fromInputDate(value);
     setBaseDate(nextDate);
-    router.replace(`/planner?date=${value}&view=${view}`);
+    setScrollTargetDate(value);
+    router.replace(`/planner?date=${value}&view=${view}`, { scroll: false });
+  }
+
+  function navigateByOffset(direction: "prev" | "next") {
+    const nextDate = shiftDateByView(baseDate, view === "list" ? "month" : view, direction);
+    const nextDateValue = toInputDate(nextDate);
+    setBaseDate(nextDate);
+    router.replace(`/planner?date=${nextDateValue}&view=${view}`, { scroll: false });
+  }
+
+  function changeView(nextView: PlannerView) {
+    setView(nextView);
+    router.replace(`/planner?date=${toInputDate(baseDate)}&view=${nextView}`, { scroll: false });
   }
 
   return (
@@ -106,45 +144,22 @@ export function PlannerPage({
         title="Planner"
         description="Use the planner to review room usage, manage daily reservations, and maintain a conflict-safe booking calendar."
         actions={
-          <>
+          user ? (
             <Link href="/bookings/new">
-              <Button>
+              <Button className="!bg-white !text-slate-950 hover:!bg-white/90">
                 <CalendarPlus2 className="mr-2 h-4 w-4" />
-                {t("Create booking")}
+                {t(user.role === "ADMIN" ? "Create booking" : "Request booking")}
               </Button>
             </Link>
-          </>
+          ) : null
         }
       />
 
       <div className="space-y-6 px-8 py-6">
-        {showHistoryCard ? (
-          <Card className="bg-[linear-gradient(135deg,rgba(240,247,255,0.96),rgba(255,255,255,0.98))]">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[var(--accent)]">{t("Historical data available")}</p>
-                <h3 className="mt-2 text-xl font-semibold text-slate-950">{t("Imported reservations are in the planner")}</h3>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                  {t("This planner contains")} {historySummary.totalReservations.toLocaleString()} {t("reservations from")}{" "}
-                  {formatLongDate(historySummary.earliestDate)} to {formatLongDate(historySummary.latestDate)}.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="secondary" onClick={() => jumpToDate(historySummary.earliestDate)}>
-                  {t("Jump to earliest booking")}
-                </Button>
-                <Button variant="ghost" onClick={() => jumpToDate(historySummary.latestDate)}>
-                  {t("Return to latest booking")}
-                </Button>
-              </div>
-            </div>
-          </Card>
-        ) : null}
-
-        <Card className="bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(237,243,255,0.82))]">
+        <Card className="planner-toolbar-card">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex flex-wrap items-center gap-3">
-              <Button variant="ghost" onClick={() => setBaseDate(shiftDateByView(baseDate, view === "list" ? "month" : view, "prev"))}>
+              <Button variant="ghost" onClick={() => navigateByOffset("prev")}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
               <div>
@@ -155,25 +170,27 @@ export function PlannerPage({
                   {formatLongDate(visibleDates[visibleDates.length - 1])}
                 </p>
               </div>
-              <Button variant="ghost" onClick={() => setBaseDate(shiftDateByView(baseDate, view === "list" ? "month" : view, "next"))}>
+              <Button variant="ghost" onClick={() => navigateByOffset("next")}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
               <input
                 type="date"
-                className="rounded-xl border border-slate-300 px-3 py-2.5 text-sm"
+                className="rounded-xl border border-[var(--field-border)] bg-[var(--field-bg)] px-3 py-2.5 text-sm text-[var(--ink)]"
                 value={toInputDate(baseDate)}
                 onChange={(event) => jumpToDate(event.target.value)}
               />
+              <Button variant="secondary" className="!bg-white !text-slate-950 hover:!bg-white/90" onClick={() => jumpToDate(toInputDate(new Date()))}>
+                <Crosshair className="mr-2 h-4 w-4" />
+                {t("Jump to today")}
+              </Button>
             </div>
             <div className="flex flex-wrap gap-2">
               {plannerViews.map((item) => (
                 <Button
                   key={item.value}
                   variant={item.value === view ? "primary" : "ghost"}
-                  onClick={() => {
-                    setView(item.value);
-                    router.replace(`/planner?date=${toInputDate(baseDate)}&view=${item.value}`);
-                  }}
+                  className={item.value === view ? "planner-view-button-active" : "planner-view-button"}
+                  onClick={() => changeView(item.value)}
                 >
                   {t(item.label)}
                 </Button>

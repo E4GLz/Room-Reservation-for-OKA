@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { ensureDefaultAdmin, verifyPassword } from "@/lib/auth";
+import { verifyPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { createSessionToken, getSessionCookieOptions } from "@/lib/session";
 import { findUserByEmailInsensitive, normalizeEmail } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { loginSchema } from "@/lib/validation";
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  await ensureDefaultAdmin();
-
   const body = await request.json();
   const parsed = loginSchema.safeParse(body);
 
@@ -45,7 +44,15 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     user: serializeUser(user)
   });
+  const token = createSessionToken(user.id, parsed.data.remember);
+  const sessionCookie = getSessionCookieOptions(parsed.data.remember);
+  response.cookies.set({
+    ...sessionCookie,
+    value: token
+  });
+
+  return response;
 }

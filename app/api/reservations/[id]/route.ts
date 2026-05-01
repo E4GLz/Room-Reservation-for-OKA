@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { BookingStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole, requireApiUser } from "@/lib/server-auth";
 import {
   buildNotification,
   buildReservationWriteData,
@@ -14,6 +15,11 @@ import { ReservationInput } from "@/lib/types";
 export const dynamic = 'force-dynamic';
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiUser();
+  if (auth.response || !auth.user) {
+    return auth.response;
+  }
+
   const { id } = await params;
   const reservation = await prisma.reservation.findUnique({
     where: { id },
@@ -29,10 +35,24 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     return NextResponse.json({ error: "Reservation not found." }, { status: 404 });
   }
 
+  const canView =
+    auth.user.role === "ADMIN" ||
+    reservation.requesterEmail === auth.user.email ||
+    reservation.managerId === auth.user.id;
+
+  if (!canView) {
+    return NextResponse.json({ error: "You do not have access to this reservation." }, { status: 403 });
+  }
+
   return NextResponse.json(serializeReservation(reservation));
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response || !auth.user) {
+    return auth.response;
+  }
+
   const { id } = await params;
   const body = await request.json();
   const parsed = reservationSchema.safeParse(body);
@@ -62,7 +82,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     );
   }
   
-  const validation = await validateReservationBusinessRules(parsed.data as ReservationInput, id);
+  const reservationInput = {
+    ...(parsed.data as ReservationInput),
+    createdByRole: existing.createdByRole
+  } satisfies ReservationInput;
+
+  const validation = await validateReservationBusinessRules(reservationInput, id);
   if (!validation.ok) {
     return NextResponse.json(
       {
@@ -75,12 +100,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   }
 
   let reservation;
+  const roomChanged = existing.roomId !== reservationInput.roomId;
+  const roomChangeNotes = roomChanged
+    ? `Room reassigned by admin from ${existing.roomId} to ${reservationInput.roomId}.`
+    : undefined;
 
   try {
     reservation = await prisma.reservation.update({
       where: { id },
       data: {
-        ...buildReservationWriteData(parsed.data as ReservationInput)
+        ...buildReservationWriteData(reservationInput)
       },
       include: {
         room: true,
@@ -95,7 +124,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     reservation = await prisma.reservation.update({
       where: { id },
       data: {
-        ...buildReservationWriteData(parsed.data as ReservationInput, { legacy: true })
+        ...buildReservationWriteData(reservationInput, { legacy: true })
       },
       include: {
         room: true,
@@ -106,11 +135,11 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
   await createAuditEntry({
     reservationId: reservation.id,
-    action: parsed.data.bookingStatus === BookingStatus.CANCELLED ? "CANCELLED" : "UPDATED",
-    actorName: parsed.data.requesterName,
-    actorEmail: parsed.data.requesterEmail,
-    actorRole: parsed.data.createdByRole,
-    notes: parsed.data.cancellationNotes || parsed.data.remarks,
+    action: reservationInput.bookingStatus === BookingStatus.CANCELLED ? "CANCELLED" : roomChanged ? "ROOM_REASSIGNED" : "UPDATED",
+    actorName: auth.user.name,
+    actorEmail: auth.user.email,
+    actorRole: auth.user.role,
+    notes: roomChangeNotes || reservationInput.cancellationNotes || reservationInput.remarks,
     snapshot: reservation
   });
 
@@ -124,7 +153,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   return NextResponse.json({
     reservation: serializedFresh,
     notification: buildNotification(
-      parsed.data.bookingStatus === BookingStatus.CANCELLED ? "cancelled" : "updated",
+      reservationInput.bookingStatus === BookingStatus.CANCELLED ? "cancelled" : "updated",
       `${serializedFresh.guestCompany} in ${fresh.room.name}`
     )
   });

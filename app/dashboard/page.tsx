@@ -1,9 +1,11 @@
 import { DashboardPage } from "@/components/dashboard/dashboard-page";
 import { PageHeader } from "@/components/ui/page-header";
 import { getDashboardData } from "@/lib/dashboard";
+import { requireAuthenticatedPageUser } from "@/lib/server-auth";
 
 export default async function Dashboard() {
-  const data = await getDashboardData();
+  const user = await requireAuthenticatedPageUser();
+  const data = await getDashboardData(user);
 
   return (
     <>

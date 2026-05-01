@@ -1,8 +1,9 @@
 import { PageHeader } from "@/components/ui/page-header";
 import { ReportsPage } from "@/components/reports/reports-page";
 import { BookingStatus } from "@prisma/client";
-import { addMonths, eachDayOfInterval, format, max as maxDate, min as minDate, startOfMonth } from "date-fns";
+import { addMonths, eachDayOfInterval, format, startOfMonth } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { requireAdminPageUser } from "@/lib/server-auth";
 export const dynamic = 'force-dynamic';
 
 function getOccupiedHours(reservation: {
@@ -31,8 +32,20 @@ function buildMonthlySeries<T extends { reservationDate: Date }>(
     return [];
   }
 
-  const earliestReservationDate = minDate(reservations.map((reservation) => reservation.reservationDate));
-  const latestReservationDate = maxDate(reservations.map((reservation) => reservation.reservationDate));
+  const sortedDates = reservations
+    .map((reservation) => reservation.reservationDate)
+    .sort((a, b) => a.getTime() - b.getTime());
+  const earliestReservationDate = sortedDates[0];
+  const latestReservationDate = sortedDates[sortedDates.length - 1];
+  const totalsByMonth = new Map<string, number>();
+
+  reservations.forEach((reservation) => {
+    const year = reservation.reservationDate.getFullYear();
+    const month = reservation.reservationDate.getMonth() + 1;
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    totalsByMonth.set(key, Number(((totalsByMonth.get(key) ?? 0) + valueSelector(reservation)).toFixed(1)));
+  });
+
   const series: Array<{ label: string; shortLabel: string; year: number; month: number; total: number }> = [];
 
   let cursor = startOfMonth(earliestReservationDate);
@@ -41,16 +54,8 @@ function buildMonthlySeries<T extends { reservationDate: Date }>(
   while (cursor <= end) {
     const year = cursor.getFullYear();
     const month = cursor.getMonth() + 1;
-    const total = Number(
-      reservations
-        .filter(
-          (reservation) =>
-            reservation.reservationDate.getFullYear() === year &&
-            reservation.reservationDate.getMonth() + 1 === month
-        )
-        .reduce((sum, reservation) => sum + valueSelector(reservation), 0)
-        .toFixed(1)
-    );
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    const total = Number((totalsByMonth.get(key) ?? 0).toFixed(1));
 
     series.push({
       label: format(cursor, "MMMM yyyy"),
@@ -67,10 +72,40 @@ function buildMonthlySeries<T extends { reservationDate: Date }>(
 }
 
 async function getReports() {
-  const [rooms, reservations] = await Promise.all([
-    prisma.room.findMany(),
+  const [activeRoomsCount, reservations, drinkOrders] = await Promise.all([
+    prisma.room.count({ where: { status: "ACTIVE" } }),
     prisma.reservation.findMany({
-      include: { room: true }
+      select: {
+        reservationDate: true,
+        reservationEndDate: true,
+        startTime: true,
+        endTime: true,
+        reservationType: true,
+        eventType: true,
+        chargedCompany: true,
+        bookingCompany: true,
+        attendeesCount: true,
+        bookingStatus: true,
+        foodServiceRequired: true,
+        room: {
+          select: {
+            name: true,
+            type: true
+          }
+        }
+      }
+    }),
+    prisma.drinkOrder.findMany({
+      select: {
+        status: true,
+        itemNameSnapshot: true,
+        roomId: true,
+        room: {
+          select: {
+            name: true
+          }
+        }
+      }
     })
   ]);
   const activeReservations = reservations.filter((item) => item.bookingStatus !== BookingStatus.CANCELLED);
@@ -78,6 +113,38 @@ async function getReports() {
   const reservationTypeMap = new Map<string, number>();
   const roomTypeMap = new Map<string, number>();
   const occupiedHoursByRoomMap = new Map<string, number>();
+  const hospitalityItemsMap = new Map<string, number>();
+  const hospitalityRoomsMap = new Map<string, number>();
+
+  const hospitalitySummary = drinkOrders.reduce(
+    (summary, order) => {
+      summary.totalOrders += 1;
+      if (order.status === "NEW") {
+        summary.newOrders += 1;
+      }
+      if (order.status === "PREPARING") {
+        summary.preparingOrders += 1;
+      }
+      if (order.status === "SERVED") {
+        summary.servedOrders += 1;
+      }
+      if (order.status === "CANCELLED") {
+        summary.cancelledOrders += 1;
+      }
+
+      hospitalityItemsMap.set(order.itemNameSnapshot, (hospitalityItemsMap.get(order.itemNameSnapshot) ?? 0) + 1);
+      hospitalityRoomsMap.set(order.room.name, (hospitalityRoomsMap.get(order.room.name) ?? 0) + 1);
+
+      return summary;
+    },
+    {
+      totalOrders: 0,
+      newOrders: 0,
+      preparingOrders: 0,
+      servedOrders: 0,
+      cancelledOrders: 0
+    }
+  );
 
   activeReservations.forEach((reservation) => {
     const chargedCompany = (reservation as typeof reservation & { chargedCompany?: string }).chargedCompany ?? reservation.bookingCompany;
@@ -91,7 +158,7 @@ async function getReports() {
   });
 
   return {
-    activeRooms: rooms.filter((room) => room.status === "ACTIVE").length,
+    activeRooms: activeRoomsCount,
     totalBookings: activeReservations.length,
     occupiedHours: Number(activeReservations.reduce((sum, reservation) => sum + getOccupiedHours(reservation as typeof reservation & { reservationEndDate?: Date | null }), 0).toFixed(1)),
     averageAttendees: activeReservations.length
@@ -107,6 +174,18 @@ async function getReports() {
       .slice(0, 5),
     reservationTypeMix: Array.from(reservationTypeMap.entries()).map(([type, total]) => ({ type, total })),
     roomTypeMix: Array.from(roomTypeMap.entries()).map(([type, total]) => ({ type, total })),
+    hospitality: {
+      ...hospitalitySummary,
+      roomsWithOrders: hospitalityRoomsMap.size,
+      topItems: Array.from(hospitalityItemsMap.entries())
+        .map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5),
+      topRooms: Array.from(hospitalityRoomsMap.entries())
+        .map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5)
+    },
     occupiedHoursByRoom: Array.from(occupiedHoursByRoomMap.entries())
       .map(([name, hours]) => ({ name, hours }))
       .sort((a, b) => b.hours - a.hours)
@@ -126,6 +205,7 @@ async function getReports() {
 }
 
 export default async function Reports() {
+  await requireAdminPageUser();
   const data = await getReports();
 
   return (
