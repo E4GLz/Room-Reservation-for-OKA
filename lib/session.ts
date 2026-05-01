@@ -9,7 +9,7 @@ type SessionPayload = {
 };
 
 function getSessionSecret() {
-  const secret = process.env.SESSION_SECRET || process.env.AUTH_SECRET;
+  const secret = process.env.SESSION_SECRET || "";
 
   if (secret) {
     return secret;
