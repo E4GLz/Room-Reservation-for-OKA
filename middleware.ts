@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { SESSION_COOKIE_NAME } from "@/lib/session-config";
 
-const PUBLIC_PATHS = ["/", "/login", "/register", "/agenda"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/agenda", "/guest-order"];
 const PUBLIC_API_PATHS = ["/api/auth/login", "/api/auth/register", "/api/auth/session", "/api/auth/logout"];
 
 function isPublicPath(pathname: string) {
