@@ -2,9 +2,13 @@ import type {
   AppSettings,
   BlockedDay,
   BookingStatus,
+  DrinkOrderStatus,
   ManagerApprovalStatus,
+  MenuItem,
+  MenuItemModifier,
   Room,
   RoomStatus,
+  RoomServiceToken,
   UserRole,
   UserStatus
 } from "@prisma/client";
@@ -28,6 +32,12 @@ export type UserRecord = AppUser & {
 };
 
 export type RoomRecord = Omit<Room, 'createdAt' | 'updatedAt'> & {
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
+export type RoomServiceTokenRecord = Omit<RoomServiceToken, "createdAt" | "updatedAt"> & {
+  room?: RoomRecord;
   createdAt: string | Date;
   updatedAt: string | Date;
 };
@@ -85,6 +95,40 @@ export type ReservationRecord = {
   auditEntries?: ReservationAuditRecord[];
 };
 
+export type MenuItemModifierRecord = Omit<MenuItemModifier, "createdAt" | "updatedAt"> & {
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+};
+
+export type MenuItemRecord = Omit<MenuItem, "createdAt" | "updatedAt"> & {
+  imageAttachment?: string | null;
+  modifiers: MenuItemModifierRecord[];
+  createdAt: string | Date;
+  updatedAt: string | Date;
+};
+
+export type DrinkOrderRecord = {
+  id: string;
+  reservationId: string | null;
+  roomId: string;
+  roomServiceTokenId: string | null;
+  menuItemId: string;
+  guestLabel?: string | null;
+  itemNameSnapshot: string;
+  modifierSummary?: string | null;
+  customNote?: string | null;
+  status: DrinkOrderStatus;
+  submittedAt: string | Date;
+  preparingAt?: string | Date | null;
+  servedAt?: string | Date | null;
+  guestReminderRequestedAt?: string | Date | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  room: RoomRecord;
+  menuItem: MenuItemRecord;
+  reservation?: ReservationRecord | null;
+};
+
 export type PlannerView = "month" | "week" | "day" | "list";
 
 export type FilterState = {
@@ -100,6 +144,7 @@ export type DashboardPayload = {
     confirmedThisMonth: number;
     pendingThisMonth: number;
     cancelledThisMonth: number;
+    foodServiceThisMonth: number;
     occupiedHoursThisMonth: number;
     adminCreatedThisMonth: number;
     standardRequestedThisMonth: number;
@@ -146,6 +191,16 @@ export type DashboardPayload = {
     reservation: ReservationRecord;
     startsInHours: number;
   }>;
+  hospitality: {
+    totalOrders: number;
+    newOrders: number;
+    preparingOrders: number;
+    servedOrders: number;
+    cancelledOrders: number;
+    roomsWithOrders: number;
+    topItems: Array<{ name: string; total: number }>;
+    topRooms: Array<{ name: string; total: number }>;
+  };
   monthlyTrend: Array<{ label: string; shortLabel: string; year: number; month: number; total: number }>;
   occupiedHoursTrend: Array<{ label: string; shortLabel: string; year: number; month: number; hours: number }>;
 };
@@ -160,6 +215,16 @@ export type ReportsPayload = {
   topCompanies: Array<{ company: string; total: number }>;
   reservationTypeMix: Array<{ type: string; total: number }>;
   roomTypeMix: Array<{ type: string; total: number }>;
+  hospitality: {
+    totalOrders: number;
+    newOrders: number;
+    preparingOrders: number;
+    servedOrders: number;
+    cancelledOrders: number;
+    roomsWithOrders: number;
+    topItems: Array<{ name: string; total: number }>;
+    topRooms: Array<{ name: string; total: number }>;
+  };
   monthlyTrend: Array<{ label: string; shortLabel: string; year: number; month: number; total: number }>;
   occupiedHoursByRoom: Array<{ name: string; hours: number }>;
   occupiedHoursTrend: Array<{ label: string; shortLabel: string; year: number; month: number; hours: number }>;
@@ -260,4 +325,31 @@ export type SettingsFormValues = {
     label: string;
     notes?: string;
   }>;
+};
+
+export type MenuItemFormValues = {
+  name: string;
+  nameArabic?: string;
+  category: string;
+  description?: string;
+  descriptionArabic?: string;
+  imageAttachment?: string;
+  isActive: boolean;
+  isOutOfStock: boolean;
+  allowCustomNote: boolean;
+  sortOrder: number;
+  modifiers: Array<{
+    id?: string;
+    label: string;
+    labelArabic?: string;
+    isActive: boolean;
+    sortOrder: number;
+  }>;
+};
+
+export type GuestOrderPayload = {
+  guestLabel?: string;
+  menuItemId: string;
+  selectedModifierIds: string[];
+  customNote?: string;
 };

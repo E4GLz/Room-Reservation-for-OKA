@@ -66,6 +66,8 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
   const hasWeekdayData = data.weekdayPattern.some((item) => item.total > 0);
   const hasBusiestDays = data.busiestDays.length > 0;
   const hasOccupiedHoursTrend = data.occupiedHoursTrend.some((item) => item.hours > 0);
+  const hasHospitalityItems = data.hospitality.topItems.some((item) => item.total > 0);
+  const hasFoodServiceDemand = data.totals.totalThisMonth > 0;
   const availableTrendYears = [...new Set(data.monthlyTrend.map((item) => item.year))].sort((a, b) => a - b);
   const latestTrendPoint = data.monthlyTrend[data.monthlyTrend.length - 1];
   const [selectedTrendYear, setSelectedTrendYear] = useState<number>(latestTrendPoint?.year ?? new Date().getFullYear());
@@ -85,7 +87,45 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
     data.totals.totalThisMonth === 0 ? 0 : Math.round((currentUserActivity.total / data.totals.totalThisMonth) * 100);
   const hasAdminReminderRecipients = data.adminReminderConfig.recipientEmails.length > 0;
   const ownUpcoming = data.upcoming.filter((reservation) => reservation.requesterEmail === user?.email);
+  const todayAgenda = useMemo(
+    () =>
+      data.upcoming
+        .filter((reservation) => isReservationOnDate(reservation, new Date()))
+        .sort((left, right) => {
+          const leftStatus = getReservationTimingStatus(left);
+          const rightStatus = getReservationTimingStatus(right);
+          const statusOrder = { current: 0, upcoming: 1, finished: 2 };
+          const byStatus = statusOrder[leftStatus] - statusOrder[rightStatus];
+          if (byStatus !== 0) {
+            return byStatus;
+          }
+          return getReservationStartDateTime(left).getTime() - getReservationStartDateTime(right).getTime();
+        }),
+    [data.upcoming]
+  );
+  const currentAgenda = useMemo(
+    () =>
+      todayAgenda.filter((reservation) => getReservationTimingStatus(reservation) === "current"),
+    [todayAgenda]
+  );
+  const upcomingAgenda = useMemo(
+    () =>
+      data.upcoming
+        .filter((reservation) => getReservationTimingStatus(reservation) === "upcoming")
+        .sort((left, right) => getReservationStartDateTime(left).getTime() - getReservationStartDateTime(right).getTime()),
+    [data.upcoming]
+  );
   const totalTypeBookings = data.bookingsByEventType.reduce((sum, item) => sum + item.total, 0);
+  const totalFoodServiceBookings = data.totals.totalThisMonth;
+  const foodServiceData = [
+    { name: t("Food service requested"), value: data.totals.foodServiceThisMonth },
+    { name: t("No food service"), value: Math.max(data.totals.totalThisMonth - data.totals.foodServiceThisMonth, 0) }
+  ]
+    .filter((item) => item.value > 0)
+    .map((item) => ({
+      ...item,
+      percent: totalFoodServiceBookings === 0 ? 0 : Math.round((item.value / totalFoodServiceBookings) * 100)
+    }));
   const typeMixData = data.bookingsByEventType.map((item) => ({
     ...item,
     percent: totalTypeBookings === 0 ? 0 : Math.round((item.total / totalTypeBookings) * 100)
@@ -100,7 +140,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
     async function loadManagerApprovals() {
       setManagerApprovalsLoading(true);
       try {
-        const response = await fetch(`/api/manager-approvals?managerEmail=${encodeURIComponent(user.email)}`);
+        const response = await fetch("/api/manager-approvals");
 
         if (!response.ok) {
           setManagerApprovals([]);
@@ -137,10 +177,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          action,
-          actorName: user.name,
-          actorEmail: user.email,
-          actorRole: user.role
+          action
         })
       });
 
@@ -165,7 +202,59 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
 
   return (
     <div className="space-y-6 px-8 py-6">
-      <Card className="overflow-hidden bg-[linear-gradient(135deg,#1b256b_0%,#2557e5_52%,#8cb2ff_132%)] text-white">
+      {isAdmin ? (
+        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-950">{t("Current meetings now")}</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {t("Live meetings happening right now so operations can follow up immediately.")}
+                </p>
+              </div>
+              <DoorOpen className="h-5 w-5 text-[var(--accent)]" />
+            </div>
+            <div className="mt-4 space-y-3">
+              {currentAgenda.length === 0 ? (
+                <StatePanel
+                  title={t("No meetings are running right now")}
+                  message={t("The next meetings for today and tomorrow are listed in the upcoming panel.")}
+                />
+              ) : (
+                currentAgenda.map((reservation) => (
+                  <AdminAgendaCard key={reservation.id} reservation={reservation} language={language} t={t} />
+                ))
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-950">{t("Upcoming meetings for today and tomorrow")}</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {t("Use this queue to prepare rooms, hospitality, and support for the next meetings.")}
+                </p>
+              </div>
+              <CalendarClock className="h-5 w-5 text-[var(--accent)]" />
+            </div>
+            <div className="mt-4 space-y-3">
+              {upcomingAgenda.length === 0 ? (
+                <StatePanel
+                  title={t("No upcoming meetings in the next two days")}
+                  message={t("There are no upcoming reservations scheduled for the rest of today or tomorrow.")}
+                />
+              ) : (
+                upcomingAgenda.map((reservation) => (
+                  <AdminAgendaCard key={reservation.id} reservation={reservation} language={language} t={t} />
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+      ) : null}
+
+      <Card className="overflow-hidden text-white" style={{ background: "var(--snapshot-bg)" }}>
         <div className="grid gap-6 lg:grid-cols-[1.35fr_0.95fr]">
           <div>
             <p className="text-[11px] uppercase tracking-[0.26em] text-white/70">{t("Operations snapshot")}</p>
@@ -190,20 +279,20 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
             )}
             <div className="mt-6 flex flex-wrap gap-3">
               <Link href="/planner">
-                <Button variant="secondary" className="shadow-sm">
+                <Button variant="secondary" className="!bg-white !text-slate-950 shadow-sm hover:!bg-white/90">
                   {t("Open planner")}
                 </Button>
               </Link>
               {isAdmin ? (
                 <Link href="/bookings/new">
-                  <Button variant="secondary" className="shadow-sm">
+                  <Button variant="secondary" className="!bg-white !text-slate-950 shadow-sm hover:!bg-white/90">
                     {t("Create booking")}
                   </Button>
                 </Link>
               ) : (
-                <Link href="/my-bookings">
+                <Link href="/bookings/new">
                   <Button variant="secondary" className="shadow-sm">
-                    {t("My bookings")}
+                    {t("Request booking")}
                   </Button>
                 </Link>
               )}
@@ -318,6 +407,77 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
         </div>
       ) : null}
 
+      {isAdmin ? (
+        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <ChartCard title={t("Food service demand")} description={t("How many current-month bookings require food service support")}>
+            {hasFoodServiceDemand ? (
+              <div className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                    <Pie
+                      data={foodServiceData}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={60}
+                      outerRadius={100}
+                      label={({ payload }) => `${(payload as { percent?: number } | undefined)?.percent ?? 0}%`}
+                      labelLine={false}
+                    >
+                      {foodServiceData.map((entry, index) => (
+                        <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(_, name, item) => {
+                        const payload = item?.payload as { percent?: number; value?: number } | undefined;
+                        return [`${payload?.percent ?? 0}%`, `${t(String(name))} (${payload?.value ?? 0})`];
+                      }}
+                    />
+                    <Legend
+                      verticalAlign="bottom"
+                      iconType="circle"
+                      wrapperStyle={{ paddingTop: 18 }}
+                      formatter={(value, entry) => {
+                        const payload = entry?.payload as { percent?: number } | undefined;
+                        return `${t(String(value))} (${payload?.percent ?? 0}%)`;
+                      }}
+                    />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+            ) : (
+              <StatePanel title={t("No food service demand yet")} message={t("Food service demand will appear once bookings are created for this month.")} />
+            )}
+          </ChartCard>
+
+          <ChartCard title={t("Drink types ordered")} description={t("Top beverage choices submitted by guests this month")}>
+            {hasHospitalityItems ? (
+              <div className="space-y-3">
+                {data.hospitality.topItems.map((item) => {
+                  const maxValue = Math.max(...data.hospitality.topItems.map((entry) => entry.total), 1);
+                  return (
+                    <div key={item.name} className="rounded-[20px] bg-slate-50 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="text-sm font-medium text-slate-800">{item.name}</p>
+                        <p className="text-sm font-semibold text-slate-950">{item.total}</p>
+                      </div>
+                      <div className="h-2.5 rounded-full bg-slate-200">
+                        <div
+                          className="h-2.5 rounded-full"
+                          style={{ width: `${Math.max((item.total / maxValue) * 100, 8)}%`, background: "linear-gradient(90deg,#16a34a,#f59e0b)" }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <StatePanel title={t("No hospitality orders yet")} message={t("Drink orders will appear here once guests submit hospitality requests.")} />
+            )}
+          </ChartCard>
+        </div>
+      ) : null}
+
       {!isAdmin ? (
         <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <Card>
@@ -352,8 +512,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
               <Link href="/my-bookings">
                 <Button variant="secondary" className="w-full justify-start">{t("Open my booking history")}</Button>
               </Link>
+              <Link href="/bookings/new">
+                <Button variant="secondary" className="w-full justify-start">{t("Request a booking")}</Button>
+              </Link>
               <div className="rounded-[18px] bg-slate-50 px-4 py-4 text-sm text-slate-600">
-                {t("Room setup, booking creation, edits, cancellations, users, and settings remain managed from the admin side.")}
+                {t("Room setup, direct booking creation, edits, cancellations, users, and settings remain managed from the admin side.")}
               </div>
             </div>
           </Card>
@@ -424,11 +587,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
       ) : null}
 
       {isAdmin ? (
-        <>
-          <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-            <ChartCard title={t("Reservation trend")} description={t("Rolling twelve-month view based on reservation history")}>
-              <div className="mb-4 flex flex-wrap gap-2">
-                <select
+          <>
+            <div className="grid gap-6">
+              <ChartCard title={t("Reservation trend")} description={t("Rolling twelve-month view based on reservation history")}>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <select
                   className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
                   value={selectedTrendYear}
                   onChange={(event) => {
@@ -480,53 +643,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                     </AreaChart>
                   </ResponsiveContainer>
                 </div>
-              ) : (
-                <StatePanel title={t("No trend data yet")} message={t("This chart will fill in as reservations are added for the selected period.")} />
-              )}
-            </ChartCard>
-
-            <ChartCard title={t("Reservation type mix")} description={t("Distribution across all imported and current reservations")}>
-              {hasTypeData ? (
-                <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={typeMixData}
-                        dataKey="total"
-                        nameKey="type"
-                        innerRadius={62}
-                        outerRadius={100}
-                        paddingAngle={3}
-                        label={({ payload }) => `${(payload as { percent?: number } | undefined)?.percent ?? 0}%`}
-                        labelLine={false}
-                      >
-                        {typeMixData.map((entry, index) => (
-                          <Cell key={entry.type} fill={pieColors[index % pieColors.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                          formatter={(_, name, item) => {
-                            const payload = item?.payload as { percent?: number } | undefined;
-                            return [`${payload?.percent ?? 0}%`, t(String(name))];
-                          }}
-                      />
-                      <Legend
-                        verticalAlign="bottom"
-                        iconType="circle"
-                        wrapperStyle={{ paddingTop: 18 }}
-                        formatter={(value, entry) => {
-                          const payload = entry?.payload as { percent?: number } | undefined;
-                          return `${t(String(value))} (${payload?.percent ?? 0}%)`;
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              ) : (
-                <StatePanel title={t("No reservation mix yet")} message={t("Once bookings are created, this view will show which reservation types are driving demand.")} />
-              )}
-            </ChartCard>
-          </div>
+                ) : (
+                  <StatePanel title={t("No trend data yet")} message={t("This chart will fill in as reservations are added for the selected period.")} />
+                )}
+              </ChartCard>
+            </div>
 
           <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
             <ChartCard title={t("Room demand")} description={t("Most frequently booked rooms across reservation history")}>
@@ -595,6 +716,48 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                 </>
               ) : (
                 <StatePanel title={t("No booking pattern yet")} message={t("This chart will show the busiest weekdays once reservations exist.")} />
+              )}
+            </ChartCard>
+
+            <ChartCard title={t("Reservation type mix")} description={t("How booking demand is distributed across reservation types")}>
+              {hasTypeData ? (
+                <div className="h-[28rem]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={typeMixData}
+                        dataKey="total"
+                        nameKey="type"
+                        innerRadius={66}
+                        outerRadius={108}
+                        paddingAngle={3}
+                        label={({ payload }) => `${(payload as { percent?: number } | undefined)?.percent ?? 0}%`}
+                        labelLine={false}
+                      >
+                        {typeMixData.map((entry, index) => (
+                          <Cell key={entry.type} fill={pieColors[index % pieColors.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(_, name, item) => {
+                          const payload = item?.payload as { percent?: number; total?: number } | undefined;
+                          return [`${payload?.percent ?? 0}%`, `${t(String(name))} (${payload?.total ?? 0})`];
+                        }}
+                      />
+                      <Legend
+                        verticalAlign="bottom"
+                        iconType="circle"
+                        wrapperStyle={{ paddingTop: 18 }}
+                        formatter={(value, entry) => {
+                          const payload = entry?.payload as { percent?: number } | undefined;
+                          return `${t(String(value))} (${payload?.percent ?? 0}%)`;
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <StatePanel title={t("No reservation mix yet")} message={t("This chart will show the demand split by reservation type once bookings are available.")} />
               )}
             </ChartCard>
           </div>
@@ -758,66 +921,6 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
         <Card>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="text-lg font-semibold text-slate-950">{t("Next agenda")}</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {t("What staff should be preparing for today and tomorrow.")}
-              </p>
-            </div>
-            <DoorOpen className="h-5 w-5 text-[var(--accent)]" />
-          </div>
-          <div className="mt-4 grid gap-3 xl:grid-cols-2">
-            {data.upcoming.length === 0 ? (
-              <div className="xl:col-span-2">
-                <StatePanel
-                  title={t("No immediate bookings")}
-                  message={t("There are no upcoming reservations in the next two days.")}
-                />
-              </div>
-            ) : (
-              data.upcoming.map((reservation) => (
-                <div key={reservation.id} className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-950">{reservation.guestCompany}</p>
-                      <p className="mt-1 text-sm text-slate-600">{reservation.chargedDepartment}</p>
-                    </div>
-                    <Link
-                      href={`/bookings/${reservation.id}`}
-                      className="text-slate-400 transition hover:text-slate-700"
-                    >
-                      <ArrowUpRight className="h-4 w-4" />
-                    </Link>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.14em] text-slate-500">
-                    <span className="inline-flex items-center gap-1.5">
-                      <Clock3 className="h-3.5 w-3.5" />
-                      {reservation.startTime} - {reservation.endTime}
-                    </span>
-                    <span>{reservation.room.name}</span>
-                    <span>{formatLocalizedDate(reservation.reservationDate?.toString(), language)}</span>
-                  </div>
-                  {reservation.foodServiceRequired ? (
-                    <div className="mt-3 rounded-[16px] bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
-                      <div className="flex items-center gap-2 font-medium">
-                        <UtensilsCrossed className="h-4 w-4" />
-                        {t("Food service requested")}
-                      </div>
-                      <p className="mt-1 text-xs uppercase tracking-[0.12em] text-amber-700">
-                        {reservation.foodServiceLocation || t("Location not set")}
-                      </p>
-                    </div>
-                  ) : null}
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
-      ) : null}
-
-      {isAdmin ? (
-        <Card>
-          <div className="flex items-center justify-between gap-3">
-            <div>
               <h3 className="text-lg font-semibold text-slate-950">{t("Busiest booking dates")}</h3>
                 <p className="mt-1 text-sm text-slate-500">
                   {t("Highest-demand dates across the imported reservation history.")}
@@ -869,6 +972,75 @@ function InsightPill({ label, value }: { label: string; value: string }) {
   );
 }
 
+function AdminAgendaCard({
+  reservation,
+  language,
+  t
+}: {
+  reservation: ReservationRecord;
+  language: string;
+  t: (text: string) => string;
+}) {
+  const status = getReservationTimingStatus(reservation);
+
+  return (
+    <div className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-950">{reservation.guestCompany}</p>
+          <p className="mt-1 text-sm text-slate-600">{reservation.chargedDepartment}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <AgendaStatusBadge status={status} t={t} />
+          <Link
+            href={`/bookings/${reservation.id}`}
+            className="text-slate-400 transition hover:text-slate-700"
+          >
+            <ArrowUpRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.14em] text-slate-500">
+        <span className="inline-flex items-center gap-1.5">
+          <Clock3 className="h-3.5 w-3.5" />
+          {reservation.startTime} - {reservation.endTime}
+        </span>
+        <span>{reservation.room.name}</span>
+        <span>{formatLocalizedDate(reservation.reservationDate?.toString(), language)}</span>
+      </div>
+      {reservation.foodServiceRequired ? (
+        <div className="mt-3 rounded-[16px] bg-amber-50 px-3 py-2 text-sm text-amber-900 ring-1 ring-amber-200">
+          <div className="flex items-center gap-2 font-medium">
+            <UtensilsCrossed className="h-4 w-4" />
+            {t("Food service requested")}
+          </div>
+          <p className="mt-1 text-xs uppercase tracking-[0.12em] text-amber-700">
+            {reservation.foodServiceLocation || t("Location not set")}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AgendaStatusBadge({
+  status,
+  t
+}: {
+  status: "current" | "upcoming" | "finished";
+  t: (text: string) => string;
+}) {
+  if (status === "current") {
+    return <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-emerald-700 ring-1 ring-emerald-200">{t("Current")}</span>;
+  }
+
+  if (status === "finished") {
+    return <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-rose-700 ring-1 ring-rose-200">{t("Finished")}</span>;
+  }
+
+  return <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-amber-700 ring-1 ring-amber-200">{t("Upcoming")}</span>;
+}
+
 function languageAwareCount(value: number) {
   return value.toLocaleString();
 }
@@ -894,4 +1066,42 @@ function formatTrendLabel(
   }
 
   return payload.label ? t(payload.label) : "";
+}
+
+function getReservationStartDateTime(reservation: ReservationRecord) {
+  const base = new Date(reservation.reservationDate);
+  const [hours, minutes] = reservation.startTime.split(":").map(Number);
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hours, minutes, 0, 0);
+}
+
+function getReservationEndDateTime(reservation: ReservationRecord) {
+  const base = new Date(reservation.reservationDate);
+  const [hours, minutes] = reservation.endTime.split(":").map(Number);
+  return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hours, minutes, 0, 0);
+}
+
+function getReservationTimingStatus(reservation: ReservationRecord) {
+  const now = new Date();
+  const start = getReservationStartDateTime(reservation);
+  const end = getReservationEndDateTime(reservation);
+
+  if (now < start) {
+    return "upcoming" as const;
+  }
+
+  if (now > end) {
+    return "finished" as const;
+  }
+
+  return "current" as const;
+}
+
+function isReservationOnDate(reservation: ReservationRecord, date: Date) {
+  const start = new Date(reservation.reservationDate);
+  const end = new Date(reservation.reservationEndDate ?? reservation.reservationDate);
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const startDay = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+
+  return target >= startDay && target <= endDay;
 }

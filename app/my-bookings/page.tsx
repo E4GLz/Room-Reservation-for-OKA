@@ -1,7 +1,9 @@
 import { MyBookingsPage } from "@/components/bookings/my-bookings-page";
 import { PageHeader } from "@/components/ui/page-header";
+import { requireAuthenticatedPageUser } from "@/lib/server-auth";
 
-export default function MyBookings() {
+export default async function MyBookings() {
+  await requireAuthenticatedPageUser();
   return (
     <>
       <PageHeader

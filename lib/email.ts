@@ -3,7 +3,13 @@ import nodemailer from "nodemailer";
 function readSmtpConfig() {
   const host = process.env.SMTP_HOST;
   const port = Number(process.env.SMTP_PORT ?? 587);
-  const secure = process.env.SMTP_SECURE === "true";
+  const secureSetting = process.env.SMTP_SECURE?.trim().toLowerCase();
+  const secure =
+    secureSetting === "true"
+      ? true
+      : secureSetting === "false"
+        ? false
+        : port === 465;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   const from = process.env.SMTP_FROM;

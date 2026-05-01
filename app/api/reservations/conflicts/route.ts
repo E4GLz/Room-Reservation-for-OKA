@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
+import { requireApiRole } from "@/lib/server-auth";
 import { findConflictingReservations, serializeReservation } from "@/lib/reservations";
 
 export async function GET(request: Request) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { searchParams } = new URL(request.url);
   const roomId = searchParams.get("roomId");
   const reservationDate = searchParams.get("reservationDate") || "";

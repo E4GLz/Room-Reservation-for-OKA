@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
 import { hashPassword } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole } from "@/lib/server-auth";
 import { validateUniqueUserIdentity } from "@/lib/user-identity";
 import { serializeUser } from "@/lib/utils";
 import { userSchema } from "@/lib/validation";
 export const dynamic = 'force-dynamic';
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { id } = await params;
   const user = await prisma.user.findUnique({
     where: { id },
@@ -23,6 +29,11 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   const { id } = await params;
   const body = await request.json();
   const parsed = userSchema.safeParse(body);
@@ -47,8 +58,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       name: parsed.data.name,
       email: uniqueness.email,
       phoneNumber: uniqueness.phoneNumber,
-      managerId: parsed.data.role === "ADMIN" ? null : parsed.data.managerId || null,
-      role: parsed.data.role,
+      managerId: parsed.data.role === "STANDARD" ? parsed.data.managerId || null : null,
+      role: parsed.data.role as "ADMIN" | "MANAGER" | "STANDARD" | "SERVICE",
       status: parsed.data.status,
       ...(parsed.data.password ? { passwordHash: hashPassword(parsed.data.password) } : {})
     }

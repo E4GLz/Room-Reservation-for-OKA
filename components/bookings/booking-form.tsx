@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { BookingStatus, UserRole } from "@prisma/client";
 import { Button } from "@/components/ui/button";
@@ -74,6 +75,7 @@ export function BookingForm({
   onSaved?: (payload: { reservation: ReservationRecord; notification?: { message: string } }) => void;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useSession();
   const { t } = useLanguage();
   const [form, setForm] = useState<FormState>(() =>
@@ -84,6 +86,7 @@ export function BookingForm({
   const [conflicts, setConflicts] = useState<ReservationRecord[]>([]);
   const [selectedGuestLogoFiles, setSelectedGuestLogoFiles] = useState<File[]>([]);
   const [selectedMaterialFiles, setSelectedMaterialFiles] = useState<File[]>([]);
+  const previousReservationIdRef = useRef<string | null>(reservation?.id ?? null);
 
   const filteredRooms = useMemo(
     () => rooms.filter((room) => room.type === form.reservationType),
@@ -91,13 +94,33 @@ export function BookingForm({
   );
 
   useEffect(() => {
+    const currentReservationId = reservation?.id ?? null;
+    if (previousReservationIdRef.current === currentReservationId) {
+      return;
+    }
+
+    previousReservationIdRef.current = currentReservationId;
     setForm(buildInitialState(rooms, reservation, user?.role, user?.name, user?.email));
     setError("");
     setConflicts([]);
     setSaving(false);
     setSelectedGuestLogoFiles([]);
     setSelectedMaterialFiles([]);
-  }, [reservation, rooms, user?.role, user?.name, user?.email]);
+  }, [reservation?.id, reservation, rooms, user?.role, user?.name, user?.email]);
+
+  useEffect(() => {
+    if (reservation || !user) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      requesterName: current.requesterName || user.name,
+      requesterEmail: current.requesterEmail || user.email,
+      createdByRole: current.createdByRole || user.role,
+      bookingStatus: user.role === UserRole.ADMIN ? BookingStatus.CONFIRMED : BookingStatus.PENDING
+    }));
+  }, [reservation, user]);
 
   useEffect(() => {
     if (!filteredRooms.some((room) => room.id === form.roomId)) {
@@ -110,6 +133,13 @@ export function BookingForm({
 
   const selectedRoom = useMemo(() => rooms.find((room) => room.id === form.roomId), [form.roomId, rooms]);
   const adminManaged = user?.role === UserRole.ADMIN;
+  const submitLabel = reservation ? t("Save changes") : t(adminManaged ? "Create booking" : "Request booking");
+  const foodServiceSelection =
+    form.foodServiceRequired === null
+      ? ""
+      : form.foodServiceRequired
+        ? "yes"
+        : "no";
 
   function getErrorMessage(payload: unknown) {
     if (typeof payload === "string") {
@@ -256,6 +286,18 @@ export function BookingForm({
         return;
       }
 
+      if (!reservation && !adminManaged) {
+        router.push("/my-bookings?requestSubmitted=1");
+        router.refresh();
+        return;
+      }
+
+      if (!reservation && adminManaged && searchParams.get("returnTo") === "planner") {
+        router.push("/planner?bookingCreated=1");
+        router.refresh();
+        return;
+      }
+
       router.push(`/bookings/${payload.reservation.id}`);
       router.refresh();
     } catch (submitError) {
@@ -339,7 +381,7 @@ export function BookingForm({
           </div>
 
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Guest company")} *</label>
+            <label className="mb-2 block text-sm font-medium text-slate-700">{t("Meeting Title")} *</label>
             <Input required value={form.guestCompany} onChange={(event) => setForm({ ...form, guestCompany: event.target.value })} />
           </div>
 
@@ -398,13 +440,7 @@ export function BookingForm({
           <div>
             <label className="mb-2 block text-sm font-medium text-slate-700">{t("Room for food service?")}</label>
             <Select
-              value={
-                form.foodServiceRequired === null
-                  ? ""
-                  : form.foodServiceRequired
-                    ? "yes"
-                    : "no"
-              }
+              value={foodServiceSelection}
               required
               onChange={(event) =>
                 setForm({
@@ -418,7 +454,7 @@ export function BookingForm({
                 })
               }
             >
-              <option value="" disabled>
+              <option value="" hidden>
                 {t("Select food service option")}
               </option>
               <option value="no">{t("No")}</option>
@@ -429,7 +465,7 @@ export function BookingForm({
           {form.foodServiceRequired ? (
             <div className="space-y-3">
               <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                {t("Room for food service will be reserved. Please request food from Obeikan Knowledge Academy HR > Self Service > Food Service.")}
+                {t("Room for food service will be reserved. Please request food from Nawras HR > Self Service > Food Service.")}
               </div>
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">{t("Food service room or location")} *</label>
@@ -464,12 +500,6 @@ export function BookingForm({
           <Textarea value={form.remarks} onChange={(event) => setForm({ ...form, remarks: event.target.value })} />
         </div>
 
-        <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {adminManaged
-            ? t("Admin bookings are saved directly as confirmed reservations.")
-            : t("Staff bookings are submitted to the assigned manager first, then forwarded to admin after manager approval.")}
-        </div>
-
         {error ? <div className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
         {conflicts.length > 0 ? (
           <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
@@ -486,7 +516,7 @@ export function BookingForm({
 
         <div className="flex flex-wrap justify-end gap-3">
           <Button type="submit" disabled={saving}>
-            {saving ? t("Saving...") : reservation ? t("Save changes") : t("Create booking")}
+            {saving ? t("Saving...") : submitLabel}
           </Button>
         </div>
       </form>

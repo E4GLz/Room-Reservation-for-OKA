@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { BookingStatus } from "@prisma/client";
+import { BookingStatus, UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { requireApiUser } from "@/lib/server-auth";
 import {
   buildNotification,
   buildReservationWriteData,
@@ -16,13 +17,19 @@ import { ReservationInput } from "@/lib/types";
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const auth = await requireApiUser();
+  if (auth.response || !auth.user) {
+    return auth.response;
+  }
+
   const { searchParams } = new URL(request.url);
   const start = searchParams.get("start");
   const end = searchParams.get("end");
   const roomId = searchParams.get("roomId");
   const status = searchParams.get("status");
   const search = searchParams.get("search");
-  const requesterEmail = searchParams.get("requesterEmail");
+  const requestedRequesterEmail = searchParams.get("requesterEmail");
+  const requesterEmail = auth.user.role === "ADMIN" ? requestedRequesterEmail : auth.user.email;
 
   let reservations;
 
@@ -99,6 +106,11 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiUser();
+  if (auth.response || !auth.user) {
+    return auth.response;
+  }
+
   const body = await request.json();
   const parsed = reservationSchema.safeParse(body);
 
@@ -106,7 +118,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const validation = await validateReservationBusinessRules(parsed.data as ReservationInput);
+  const reservationInput = {
+    ...(parsed.data as ReservationInput),
+    createdByRole: auth.user.role,
+    requesterEmail: auth.user.role === UserRole.ADMIN ? parsed.data.requesterEmail : auth.user.email,
+    requesterName: auth.user.role === UserRole.ADMIN ? parsed.data.requesterName : auth.user.name,
+    bookingStatus: auth.user.role === UserRole.ADMIN ? BookingStatus.CONFIRMED : BookingStatus.PENDING
+  } satisfies ReservationInput;
+
+  const validation = await validateReservationBusinessRules(reservationInput);
   if (!validation.ok) {
     return NextResponse.json(
       {
@@ -125,9 +145,9 @@ export async function POST(request: Request) {
     reservation = await prisma.reservation.create({
       data: {
         reservationCode: `RSV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`,
-        ...buildReservationWriteData(parsed.data as ReservationInput),
+        ...buildReservationWriteData(reservationInput),
         ...getManagerApprovalDefaults({
-          createdByRole: parsed.data.createdByRole,
+          createdByRole: reservationInput.createdByRole,
           managerId: validation.manager?.id
         })
       },
@@ -144,7 +164,7 @@ export async function POST(request: Request) {
     reservation = await prisma.reservation.create({
       data: {
         reservationCode: `RSV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`,
-        ...buildReservationWriteData(parsed.data as ReservationInput, { legacy: true })
+        ...buildReservationWriteData(reservationInput, { legacy: true })
       },
       include: {
         room: true,
@@ -156,10 +176,10 @@ export async function POST(request: Request) {
   await createAuditEntry({
     reservationId: reservation.id,
     action: "CREATED",
-    actorName: parsed.data.requesterName,
-    actorEmail: parsed.data.requesterEmail,
-    actorRole: parsed.data.createdByRole,
-    notes: parsed.data.remarks,
+    actorName: auth.user.name,
+    actorEmail: auth.user.email,
+    actorRole: auth.user.role,
+    notes: reservationInput.remarks,
     snapshot: reservation
   });
 
@@ -170,13 +190,13 @@ export async function POST(request: Request) {
 
   const serializedFresh = serializeReservation(fresh);
 
-  if (parsed.data.createdByRole === "STANDARD" && validation.manager) {
+  if (reservationInput.createdByRole === "STANDARD" && validation.manager) {
     await createAuditEntry({
       reservationId: reservation.id,
       action: "MANAGER_APPROVAL_REQUESTED",
-      actorName: parsed.data.requesterName,
-      actorEmail: parsed.data.requesterEmail,
-      actorRole: parsed.data.createdByRole,
+      actorName: reservationInput.requesterName,
+      actorEmail: reservationInput.requesterEmail,
+      actorRole: reservationInput.createdByRole,
       notes: `Submitted to manager ${validation.manager.name} for approval.`,
       snapshot: reservation
     });

@@ -58,15 +58,13 @@ export default async function AgendaPage() {
   const items = reservations.map((reservation) => {
     const reservationRecord = reservation as typeof reservation & {
       guestCompany?: string | null;
-      chargedDepartment?: string | null;
     };
 
     return {
       id: reservation.id,
       startTime: reservation.startTime,
       endTime: reservation.endTime,
-      meetingName: reservationRecord.chargedDepartment ?? reservation.meetingName,
-      guestCompany: reservationRecord.guestCompany ?? reservation.bookingCompany,
+      meetingTitle: reservationRecord.guestCompany ?? reservation.bookingCompany,
       roomName: reservation.room.name,
       roomLocation: reservation.room.location
     };

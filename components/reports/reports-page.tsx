@@ -21,6 +21,12 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
   const hasRoomTypeData = data.roomTypeMix.some((item) => item.total > 0);
   const hasTopCompanies = data.topCompanies.length > 0;
   const hasOccupiedHoursByRoom = data.occupiedHoursByRoom.some((item) => item.hours > 0);
+  const hasHospitalityItems = data.hospitality.topItems.some((item) => item.total > 0);
+  const hasFoodServiceDemand = data.totalBookings > 0;
+  const foodServiceData = [
+    { name: t("Food service requested"), value: data.foodServiceCount },
+    { name: t("No food service"), value: Math.max(data.totalBookings - data.foodServiceCount, 0) }
+  ].filter((item) => item.value > 0);
   const availableYears = useMemo(
     () => [...new Set(data.monthlyTrend.map((item) => item.year))].sort((a, b) => a - b),
     [data.monthlyTrend]
@@ -222,8 +228,57 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
             <InsightRow label={t("Cancellation rate")} value={`${data.cancellationRate}%`} />
             <InsightRow label={t("Food service bookings")} value={String(data.foodServiceCount)} />
             <InsightRow label={t("Average attendees")} value={String(data.averageAttendees)} />
+            <InsightRow label={t("Hospitality orders")} value={String(data.hospitality.totalOrders)} />
           </div>
         </Card>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+        <ChartCard title={t("Food service demand")} description={t("Share of reservations that requested food service support")}>
+          {hasFoodServiceDemand ? (
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={foodServiceData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100}>
+                    {foodServiceData.map((entry, index) => (
+                      <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: number, name) => [value, t(String(name))]} />
+                  <Legend verticalAlign="bottom" iconType="circle" wrapperStyle={{ paddingTop: 18 }} formatter={(value) => t(String(value))} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <StatePanel title={t("No food service demand yet")} message={t("Food service demand will appear once bookings are available.")} />
+          )}
+        </ChartCard>
+
+        <ChartCard title={t("Drink types ordered")} description={t("Top beverage choices submitted by guests")}>
+          {hasHospitalityItems ? (
+            <div className="space-y-3">
+              {data.hospitality.topItems.map((item) => {
+                const maxValue = Math.max(...data.hospitality.topItems.map((entry) => entry.total), 1);
+                return (
+                  <div key={item.name} className="rounded-[20px] bg-slate-50 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-sm font-medium text-slate-800">{item.name}</p>
+                      <p className="text-sm font-semibold text-slate-950">{item.total}</p>
+                    </div>
+                    <div className="h-2.5 rounded-full bg-slate-200">
+                      <div
+                        className="h-2.5 rounded-full"
+                        style={{ width: `${Math.max((item.total / maxValue) * 100, 8)}%`, background: "linear-gradient(90deg,#16a34a,#f59e0b)" }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <StatePanel title={t("No hospitality orders yet")} message={t("Drink orders will appear here once guests submit hospitality requests.")} />
+          )}
+        </ChartCard>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole } from "@/lib/server-auth";
 import { roomSchema } from "@/lib/validation";
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,11 @@ function getRoomErrorMessage(error: unknown) {
 }
 
 export async function GET() {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   const rooms = await prisma.room.findMany({
     orderBy: [{ status: "asc" }, { code: "asc" }],
   });
@@ -25,6 +31,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const auth = await requireApiRole("ADMIN");
+  if (auth.response) {
+    return auth.response;
+  }
+
   try {
     const body = await request.json();
     const parsed = roomSchema.safeParse(body);

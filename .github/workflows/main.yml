@@ -5,7 +5,7 @@ on:
     branches:
       - deployment
 permissions:
-  contents: write 
+  contents: write
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest # OS that handles pipeline steps
@@ -14,15 +14,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0  # Required to fetch all tags
-          token: ${{ secrets.GITHUB_TOKEN }} 
-          persist-credentials: true   
+          fetch-depth: 0 # Required to fetch all tags
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Bump version from last tag
         id: version
         run: |
           LAST_TAG=$(git tag --sort=-v:refname | head -n 1)
-          
+
           if [ -z "$LAST_TAG" ]; then
             NEW_VERSION="1.100"
           else
@@ -31,7 +31,7 @@ jobs:
             NEW_MINOR=$((MINOR + 1))
             NEW_VERSION="$MAJOR.$NEW_MINOR"
           fi
-          
+
           echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Create Git tag
@@ -63,6 +63,9 @@ jobs:
           SMTP_FROM="${{ secrets.SMTP_FROM }}"
           ADMIN_PASSWORD="${{ secrets.ADMIN_PASSWORD }}"
           ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}"
+          SESSION_SECRET="${{ secrets.SESSION_SECRET }}"
+          CRON_SECRET="${{ secrets.CRON_SECRET }}"
+
           EOF
 
       - name: Build and push Docker image
