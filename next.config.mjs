@@ -5,6 +5,9 @@ const nextConfig = {
   // Force all pages to be dynamic globally
   experimental: {
     ppr: false,
+    serverActions: {
+      bodySizeLimit: process.env.BODY_SIZE_LIMIT || "20mb",
+    },
   },
   staticPageGenerationTimeout: 1,
 };
