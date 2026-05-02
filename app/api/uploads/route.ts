@@ -10,7 +10,9 @@ export async function POST(request: Request) {
 
   const formData = await request.formData();
   const kind = String(formData.get("kind") || "files");
-  const files = formData.getAll("files").filter((entry): entry is File => entry instanceof File);
+  const files = formData
+    .getAll("files")
+    .filter((entry): entry is File => typeof entry !== "string") as File[];
 
   if (files.length === 0) {
     return NextResponse.json({ error: "No files uploaded." }, { status: 400 });
@@ -41,14 +43,14 @@ export async function POST(request: Request) {
         originalName: file.name,
         contentType: file.type || null,
         size: buffer.length,
-        bytes: buffer
-      }
+        bytes: buffer,
+      },
     });
 
     uploaded.push({
       name: file.name,
       url: `/api/uploads/${stored.id}`,
-      contentType: file.type || null
+      contentType: file.type || null,
     });
   }
 
