@@ -65,6 +65,7 @@ jobs:
           ADMIN_EMAIL="${{ secrets.ADMIN_EMAIL }}"
           SESSION_SECRET="${{ secrets.SESSION_SECRET }}"
           CRON_SECRET="${{ secrets.CRON_SECRET }}"
+          BODY_SIZE_LIMIT="${{ secrets.BODY_SIZE_LIMIT }}"
 
           EOF
 
