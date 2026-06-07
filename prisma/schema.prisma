@@ -94,6 +94,7 @@ model Room {
   capacity     Int
   location     String
   notes        String?
+  seatLayoutConfig String?
   status       RoomStatus    @default(ACTIVE)
   reservations Reservation[]
   serviceToken RoomServiceToken?
@@ -224,6 +225,8 @@ model DrinkOrder {
   roomServiceTokenId String?
   menuItemId         String
   guestLabel         String?
+  seatKey            String?
+  seatLabel          String?
   itemNameSnapshot   String
   modifierSummary    String?
   customNote         String?

@@ -36,6 +36,7 @@ import { ReservationCard } from "@/components/planner/reservation-card";
 import { StatePanel } from "@/components/ui/state-panel";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DrillDownModal, type DrillFilter } from "@/components/ui/drill-down-modal";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
 import { readErrorMessage } from "@/lib/client-errors";
@@ -72,6 +73,8 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
   const latestTrendPoint = data.monthlyTrend[data.monthlyTrend.length - 1];
   const [selectedTrendYear, setSelectedTrendYear] = useState<number>(latestTrendPoint?.year ?? new Date().getFullYear());
   const [selectedTrendMonth, setSelectedTrendMonth] = useState<number | "all">("all");
+  const [drillFilter, setDrillFilter] = useState<DrillFilter | null>(null);
+  const openDrill = (filter: DrillFilter) => setDrillFilter(filter);
   const filteredTrendData = useMemo(() => {
     const points = data.monthlyTrend.filter((item) => item.year === selectedTrendYear);
     if (selectedTrendMonth === "all") {
@@ -338,6 +341,10 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
           }
           icon={<CalendarClock className="h-5 w-5" />}
           tone="accent"
+          onClick={() => {
+            const { start, end } = currentMonthRange();
+            openDrill({ kind: "reservations", title: isAdmin ? t("Bookings this month") : t("My bookings this month"), params: { start, end } });
+          }}
         />
         <KpiCard
           label={isAdmin ? t("Pending approvals") : t("My pending")}
@@ -345,6 +352,10 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
           meta={isAdmin ? t("Requests waiting on confirmation") : t("Waiting for manager or admin review")}
           icon={<TimerReset className="h-5 w-5" />}
           tone="warning"
+          onClick={() => {
+            const { start, end } = currentMonthRange();
+            openDrill({ kind: "reservations", title: isAdmin ? t("Pending approvals") : t("My pending"), params: { start, end, status: "PENDING" } });
+          }}
         />
         <KpiCard
           label={isAdmin ? t("Confirmed bookings") : t("My confirmed")}
@@ -352,12 +363,20 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
           meta={isAdmin ? `${data.totals.todayCount} ${t("on today's agenda")}` : t("Approved and active")}
           icon={<CheckCheck className="h-5 w-5" />}
           tone="soft"
+          onClick={() => {
+            const { start, end } = currentMonthRange();
+            openDrill({ kind: "reservations", title: isAdmin ? t("Confirmed bookings") : t("My confirmed"), params: { start, end, status: "CONFIRMED" } });
+          }}
         />
         <KpiCard
           label={isAdmin ? t("Cancelled this month") : t("My schedule share")}
           value={isAdmin ? data.totals.cancelledThisMonth : currentUserShare}
           meta={isAdmin ? `${data.totals.tomorrowCount} ${t("scheduled tomorrow")}` : t("Percent of this month's total")}
           icon={<CircleOff className="h-5 w-5" />}
+          onClick={() => {
+            const { start, end } = currentMonthRange();
+            openDrill({ kind: "reservations", title: isAdmin ? t("Cancelled this month") : t("My bookings this month"), params: { start, end, ...(isAdmin ? { status: "CANCELLED" } : {}) } });
+          }}
         />
       </div>
 
@@ -367,7 +386,17 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
             {hasOccupiedHoursTrend ? (
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={data.occupiedHoursTrend}>
+                  <AreaChart
+                    data={data.occupiedHoursTrend}
+                    style={{ cursor: "pointer" }}
+                    onClick={(chartData: { activePayload?: Array<{ payload: { year?: number; month?: number; label?: string } }> }) => {
+                      const p = chartData?.activePayload?.[0]?.payload;
+                      if (p?.year && p?.month) {
+                        const { start, end } = monthRange(p.year, p.month);
+                        openDrill({ kind: "reservations", title: p.label ?? t("Occupied hours trend"), params: { start, end } });
+                      }
+                    }}
+                  >
                     <defs>
                       <linearGradient id="occupiedHoursFill" x1="0" x2="0" y1="0" y2="1">
                         <stop offset="5%" stopColor={occupiedHoursColor} stopOpacity={0.34} />
@@ -383,6 +412,7 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                     />
                     <Area type="monotone" dataKey="hours" stroke={occupiedHoursColor} strokeWidth={3} fill="url(#occupiedHoursFill)" />
                   </AreaChart>
+
                 </ResponsiveContainer>
               </div>
             ) : (
@@ -390,7 +420,12 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
             )}
           </ChartCard>
 
-          <Card>
+          <Card
+            onClick={() => {
+              const { start, end } = currentMonthRange();
+              openDrill({ kind: "reservations", title: t("Occupied hours this month"), params: { start, end } });
+            }}
+          >
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h3 className="text-lg font-semibold text-slate-950">{t("Occupied hours this month")}</h3>
@@ -422,6 +457,12 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                       outerRadius={100}
                       label={({ payload }) => `${(payload as { percent?: number } | undefined)?.percent ?? 0}%`}
                       labelLine={false}
+                      style={{ cursor: "pointer" }}
+                      onClick={(entry: { name?: string }) => {
+                        const { start, end } = currentMonthRange();
+                        const isFoodService = entry.name === t("Food service requested");
+                        openDrill({ kind: "reservations", title: entry.name ?? t("Food service demand"), params: { start, end, foodService: isFoodService ? "true" : "false" } });
+                      }}
                     >
                       {foodServiceData.map((entry, index) => (
                         <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
@@ -456,7 +497,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                 {data.hospitality.topItems.map((item) => {
                   const maxValue = Math.max(...data.hospitality.topItems.map((entry) => entry.total), 1);
                   return (
-                    <div key={item.name} className="rounded-[20px] bg-slate-50 p-3">
+                    <div
+                      key={item.name}
+                      className="cursor-pointer rounded-[20px] bg-slate-50 p-3 transition hover:bg-slate-100"
+                      onClick={() => openDrill({ kind: "drinkOrders", title: item.name, params: { itemName: item.name } })}
+                    >
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-slate-800">{item.name}</p>
                         <p className="text-sm font-semibold text-slate-950">{item.total}</p>
@@ -625,7 +670,17 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
               {hasTrendData ? (
                 <div className="h-72">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={filteredTrendData}>
+                    <AreaChart
+                      data={filteredTrendData}
+                      style={{ cursor: "pointer" }}
+                      onClick={(chartData: { activePayload?: Array<{ payload: { year?: number; month?: number; label?: string } }> }) => {
+                        const p = chartData?.activePayload?.[0]?.payload;
+                        if (p?.year && p?.month) {
+                          const { start, end } = monthRange(p.year, p.month);
+                          openDrill({ kind: "reservations", title: p.label ?? t("Reservation trend"), params: { start, end } });
+                        }
+                      }}
+                    >
                       <defs>
                         <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
                           <stop offset="5%" stopColor={trendColor} stopOpacity={0.35} />
@@ -655,7 +710,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                 <div className="space-y-3">
                   {data.bookingsByRoom.map((room) => {
                     return (
-                      <div key={room.name} className="rounded-[20px] bg-slate-50 p-3">
+                      <div
+                        key={room.name}
+                        className="cursor-pointer rounded-[20px] bg-slate-50 p-3 transition hover:bg-slate-100"
+                        onClick={() => openDrill({ kind: "reservations", title: room.name, params: { roomName: room.name } })}
+                      >
                         <div className="mb-2 flex items-center justify-between gap-3">
                           <p className="text-sm font-medium text-slate-800">{room.name}</p>
                           <p className="text-sm font-semibold text-slate-950">{room.total}</p>
@@ -684,7 +743,16 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                       <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
                       <YAxis type="category" dataKey="name" width={92} tickLine={false} axisLine={false} />
                       <Tooltip formatter={(value: number) => [`${value} ${t("hrs")}`, t("Occupied hours")]} />
-                      <Bar dataKey="hours" radius={[0, 12, 12, 0]} barSize={22} fill={occupiedHoursColor} />
+                      <Bar
+                        dataKey="hours"
+                        radius={[0, 12, 12, 0]}
+                        barSize={22}
+                        fill={occupiedHoursColor}
+                        style={{ cursor: "pointer" }}
+                        onClick={(barData: { name?: string }) => {
+                          if (barData.name) openDrill({ kind: "reservations", title: barData.name, params: { roomName: barData.name } });
+                        }}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
@@ -705,7 +773,16 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                         <XAxis type="number" allowDecimals={false} tickLine={false} axisLine={false} />
                         <YAxis type="category" dataKey="day" width={42} tickLine={false} axisLine={false} tickFormatter={(value) => t(String(value))} />
                         <Tooltip formatter={(value: number) => [value, t("Bookings")]} labelFormatter={(label) => t(String(label))} />
-                        <Bar dataKey="total" radius={[0, 12, 12, 0]} barSize={26} fill={weekdayPatternColor} />
+                        <Bar
+                          dataKey="total"
+                          radius={[0, 12, 12, 0]}
+                          barSize={26}
+                          fill={weekdayPatternColor}
+                          style={{ cursor: "pointer" }}
+                          onClick={(barData: { day?: string }) => {
+                            if (barData.day) openDrill({ kind: "reservations", title: t(barData.day), params: { weekday: barData.day } });
+                          }}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
@@ -733,6 +810,10 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
                         paddingAngle={3}
                         label={({ payload }) => `${(payload as { percent?: number } | undefined)?.percent ?? 0}%`}
                         labelLine={false}
+                        style={{ cursor: "pointer" }}
+                        onClick={(entry: { type?: string }) => {
+                          if (entry.type) openDrill({ kind: "reservations", title: t(entry.type), params: { typeFilter: entry.type } });
+                        }}
                       >
                         {typeMixData.map((entry, index) => (
                           <Cell key={entry.type} fill={pieColors[index % pieColors.length]} />
@@ -931,7 +1012,11 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
           <div className="mt-4 grid gap-3 lg:grid-cols-5">
             {hasBusiestDays ? (
               data.busiestDays.map((day, index) => (
-                <div key={day.date} className="rounded-[18px] bg-slate-50 px-4 py-4">
+                <div
+                  key={day.date}
+                  className="cursor-pointer rounded-[18px] bg-slate-50 px-4 py-4 transition hover:bg-slate-100"
+                  onClick={() => openDrill({ kind: "reservations", title: formatLocalizedDate(day.date, language), params: { start: day.date, end: day.date } })}
+                >
                   <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{t("Rank")} #{index + 1}</p>
                   <p className="mt-3 text-sm font-medium text-slate-900">{formatLocalizedDate(day.date, language)}</p>
                   <p className="mt-2 text-2xl font-semibold text-slate-950">{day.total}</p>
@@ -949,8 +1034,22 @@ export function DashboardPage({ data }: { data: DashboardPayload }) {
           </div>
         </Card>
       ) : null}
+
+      <DrillDownModal filter={drillFilter} onClose={() => setDrillFilter(null)} />
     </div>
   );
+}
+
+function monthRange(year: number, month: number) {
+  return {
+    start: new Date(year, month - 1, 1).toISOString().split("T")[0],
+    end: new Date(year, month, 0).toISOString().split("T")[0]
+  };
+}
+
+function currentMonthRange() {
+  const now = new Date();
+  return monthRange(now.getFullYear(), now.getMonth() + 1);
 }
 
 function MiniStat({ label, value, hint }: { label: string; value: string; hint: string }) {

@@ -53,6 +53,7 @@ export async function POST(request: Request) {
     type,
     capacity,
     location,
+    seatLayoutConfig,
     status = "ACTIVE",
   } = parsed.data;
 
@@ -65,7 +66,8 @@ export async function POST(request: Request) {
       location: location!,
       status,
       notes: parsed.data.notes || null,
-    },
+      seatLayoutConfig: seatLayoutConfig || null
+    } as never,
   });
 
     return NextResponse.json(room, { status: 201 });

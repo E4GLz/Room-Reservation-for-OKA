@@ -3,14 +3,15 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { DrinkOrderStatus } from "@prisma/client";
-import { BellRing, CheckCircle2, CupSoda, MapPin, Plus, Trash2 } from "lucide-react";
+import { BellRing, Check, CheckCircle2, CupSoda, MapPin, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/components/providers/language-provider";
+import { RoomSeatMap } from "@/components/hospitality/room-seat-map";
 import { parseStoredAttachments } from "@/lib/attachments";
 import { extractFlattenedFormError, readErrorMessage } from "@/lib/client-errors";
+import { listSeatOptions, parseRoomLayout } from "@/lib/room-layout";
 import type { DrinkOrderRecord, MenuItemRecord } from "@/lib/types";
 
 type PendingDrink = {
@@ -31,14 +32,14 @@ export function GuestOrderPage({
   menuItems
 }: {
   token: string;
-  room: { id: string; name: string; location: string };
+  room: { id: string; name: string; location: string; capacity: number; seatLayoutConfig?: string | null };
   reservation: { id: string; meetingTitle: string; startTime: string; endTime: string } | null;
   menuItems: MenuItemRecord[];
 }) {
   const { t } = useLanguage();
-  const [selectedItemId, setSelectedItemId] = useState(menuItems.find((item) => !item.isOutOfStock)?.id ?? "");
+  const [selectedItemId, setSelectedItemId] = useState(menuItems.find((item) => !item.isOutOfStock && item.isActive)?.id ?? "");
   const [selectedModifierIds, setSelectedModifierIds] = useState<string[]>([]);
-  const [guestLabel, setGuestLabel] = useState("");
+  const [selectedSeatKey, setSelectedSeatKey] = useState("");
   const [customNote, setCustomNote] = useState("");
   const [pendingDrinks, setPendingDrinks] = useState<PendingDrink[]>([]);
   const [saving, setSaving] = useState(false);
@@ -50,14 +51,20 @@ export function GuestOrderPage({
   const [reminderMessage, setReminderMessage] = useState("");
   const [now, setNow] = useState(Date.now());
 
-  const selectedItem = useMemo(
-    () => menuItems.find((item) => item.id === selectedItemId) ?? null,
-    [menuItems, selectedItemId]
-  );
-  const availableMenuItems = useMemo(
-    () => menuItems.filter((item) => item.isActive && !item.isOutOfStock),
-    [menuItems]
-  );
+  const hasActiveReservation = Boolean(reservation);
+  const availableMenuItems = useMemo(() => menuItems.filter((item) => item.isActive && !item.isOutOfStock), [menuItems]);
+  const groupedMenuItems = useMemo(() => {
+    const groups = new Map<string, MenuItemRecord[]>();
+    for (const item of availableMenuItems) {
+      groups.set(item.category, [...(groups.get(item.category) ?? []), item]);
+    }
+
+    return Array.from(groups.entries());
+  }, [availableMenuItems]);
+  const selectedItem = useMemo(() => availableMenuItems.find((item) => item.id === selectedItemId) ?? null, [availableMenuItems, selectedItemId]);
+  const layout = useMemo(() => parseRoomLayout(room.seatLayoutConfig ?? "", room.capacity), [room.capacity, room.seatLayoutConfig]);
+  const seatOptions = useMemo(() => listSeatOptions(layout), [layout]);
+  const selectedSeat = useMemo(() => seatOptions.find((seat) => seat.key === selectedSeatKey) ?? null, [seatOptions, selectedSeatKey]);
   const selectedModifierLabels = useMemo(() => {
     if (!selectedItem || selectedModifierIds.length === 0) {
       return "";
@@ -90,10 +97,7 @@ export function GuestOrderPage({
           return;
         }
 
-        const payloads = (await Promise.all(
-          responses.map((response) => response.json())
-        )) as Array<{ order: DrinkOrderRecord }>;
-
+        const payloads = (await Promise.all(responses.map((response) => response.json()))) as Array<{ order: DrinkOrderRecord }>;
         setTrackingOrders(payloads.map((payload) => payload.order));
         setNow(Date.now());
       } catch (refreshError) {
@@ -123,10 +127,14 @@ export function GuestOrderPage({
       }),
     [now, trackingOrders]
   );
-  const hasActiveReservation = Boolean(reservation);
 
   function addSelectedDrink() {
     if (!selectedItem) {
+      return;
+    }
+
+    if (!selectedSeat) {
+      setError(t("Please select your seat first."));
       return;
     }
 
@@ -158,6 +166,12 @@ export function GuestOrderPage({
     setMessage("");
     setTrackingError("");
 
+    if (!selectedSeat) {
+      setError(t("Please select your seat first."));
+      setSaving(false);
+      return;
+    }
+
     const items = pendingDrinks.length
       ? pendingDrinks.map((item) => ({
           menuItemId: item.menuItemId,
@@ -185,7 +199,8 @@ export function GuestOrderPage({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          guestLabel,
+          seatKey: selectedSeat.key,
+          seatLabel: selectedSeat.label,
           items
         })
       });
@@ -237,10 +252,8 @@ export function GuestOrderPage({
 
       const payloads = (await Promise.all(responses.map((response) => response.json()))) as Array<{
         order: DrinkOrderRecord;
-        message?: string;
       }>;
       const updatedMap = new Map(payloads.map((payload) => [payload.order.id, payload.order]));
-
       setTrackingOrders((current) => current.map((order) => updatedMap.get(order.id) ?? order));
       setReminderMessage(t("Reminder sent."));
       setReminderSending(false);
@@ -257,15 +270,14 @@ export function GuestOrderPage({
     setTrackingError("");
     setMessage("");
     setError("");
-    setGuestLabel("");
     setCustomNote("");
     setSelectedModifierIds([]);
-    setSelectedItemId(menuItems.find((item) => !item.isOutOfStock)?.id ?? "");
+    setSelectedItemId(availableMenuItems[0]?.id ?? "");
   }
 
   return (
     <main className="min-h-screen bg-[linear-gradient(180deg,rgba(247,249,254,0.95),rgba(239,244,252,0.85))] px-4 py-5 sm:px-5 sm:py-8">
-      <div className="mx-auto max-w-5xl space-y-5 sm:space-y-6">
+      <div className="mx-auto max-w-6xl space-y-5 sm:space-y-6">
         <section className="rounded-[28px] bg-[linear-gradient(135deg,#161d67_0%,#1f3ea0_52%,#6f95ff_130%)] px-5 py-6 text-white shadow-[0_28px_60px_-36px_rgba(16,23,67,0.9)] sm:px-6 sm:py-8">
           <p className="text-[11px] uppercase tracking-[0.24em] text-white/70">{t("Guest ordering")}</p>
           <div className="mt-3 flex flex-wrap items-start justify-between gap-4">
@@ -319,6 +331,7 @@ export function GuestOrderPage({
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-base font-semibold text-slate-950">{order.itemNameSnapshot}</p>
+                        {order.seatLabel ? <p className="mt-1 text-sm font-medium text-slate-600">{t("Seat")} {order.seatLabel}</p> : null}
                         {order.modifierSummary ? <p className="mt-1 text-sm text-slate-500">{order.modifierSummary}</p> : null}
                         {order.customNote ? <p className="mt-1 text-sm text-slate-500">{order.customNote}</p> : null}
                       </div>
@@ -344,6 +357,31 @@ export function GuestOrderPage({
             </div>
           ) : (
             <form className="space-y-6" onSubmit={handleSubmit}>
+              <div className="rounded-[24px] bg-slate-50 p-5 ring-1 ring-[var(--line)]">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] uppercase tracking-[0.22em] text-[var(--accent)]">{t("Choose your seat")}</p>
+                    <h2 className="mt-2 text-xl font-semibold text-slate-950">{t("Select where you are sitting")}</h2>
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{t("Tap your chair on the room map so the service team knows where to deliver the drinks.")}</p>
+                  </div>
+                  {selectedSeat ? (
+                    <span className="inline-flex items-center gap-2 rounded-full bg-[var(--accent-soft)] px-4 py-2 text-sm font-medium text-[var(--accent)] ring-1 ring-[var(--line)]">
+                      {t("Selected seat")}: {selectedSeat.label}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-4">
+                  <RoomSeatMap
+                    layout={layout}
+                    selectedSeatKey={selectedSeatKey}
+                    onSelect={(seatKey) => {
+                      setSelectedSeatKey(seatKey);
+                      setError("");
+                    }}
+                  />
+                </div>
+              </div>
+
               <div>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <label className="block text-sm font-medium text-slate-700">{t("Choose a drink")}</label>
@@ -352,96 +390,103 @@ export function GuestOrderPage({
                     {availableMenuItems.length} {t("available")}
                   </span>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {menuItems.map((item) => {
-                    const image = parseStoredAttachments(item.imageAttachment)[0];
+                <div className="space-y-6">
+                  {groupedMenuItems.map(([category, items]) => (
+                    <section key={category} className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-base font-semibold text-slate-950">{t(category)}</h3>
+                        <div className="h-px flex-1 bg-[var(--line)]" />
+                      </div>
 
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        disabled={item.isOutOfStock || !item.isActive}
-                        onClick={() => {
-                          setSelectedItemId(item.id);
-                          setSelectedModifierIds([]);
-                          setCustomNote("");
-                        }}
-                        className={`group overflow-hidden rounded-[24px] border text-left transition ${
-                          selectedItemId === item.id
-                            ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_18px_42px_-28px_rgba(37,87,229,0.45)]"
-                            : "border-[var(--line)] bg-white hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-[0_18px_42px_-30px_rgba(15,23,42,0.22)]"
-                        } ${item.isOutOfStock ? "opacity-55" : ""}`}
-                      >
-                        <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
-                          {image?.url ? (
-                            <Image src={image.url} alt={item.name} fill unoptimized className="object-cover transition duration-300 group-hover:scale-[1.03]" />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
-                              {t("No image")}
-                            </div>
-                          )}
-                        </div>
-                        <div className="px-4 py-4">
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="text-sm font-semibold text-slate-950">{item.name}</p>
-                              <p className="mt-1 text-sm text-slate-500">{item.category}</p>
-                            </div>
-                            {selectedItemId === item.id ? (
-                              <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-sm">
-                                <CheckCircle2 className="h-4 w-4" />
-                              </span>
-                            ) : null}
-                          </div>
-                          {item.description ? <p className="mt-2 text-xs leading-5 text-slate-500">{item.description}</p> : null}
-                        </div>
-                      </button>
-                    );
-                  })}
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {items.map((item) => {
+                          const image = parseStoredAttachments(item.imageAttachment)[0];
+
+                          return (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedItemId(item.id);
+                                setSelectedModifierIds([]);
+                                setCustomNote("");
+                              }}
+                              className={`group overflow-hidden rounded-[24px] border text-left transition ${
+                                selectedItemId === item.id
+                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] shadow-[0_18px_42px_-28px_rgba(37,87,229,0.45)]"
+                                  : "border-[var(--line)] bg-white hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-[0_18px_42px_-30px_rgba(15,23,42,0.22)]"
+                              }`}
+                            >
+                              <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
+                                {image?.url ? (
+                                  <Image src={image.url} alt={item.name} fill unoptimized className="object-cover transition duration-300 group-hover:scale-[1.03]" />
+                                ) : (
+                                  <div className="flex h-full items-center justify-center text-[11px] font-medium uppercase tracking-[0.18em] text-slate-400">
+                                    {t("No image")}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="px-4 py-4">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-950">{item.name}</p>
+                                  </div>
+                                  {selectedItemId === item.id ? (
+                                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[var(--accent)] text-white shadow-sm">
+                                      <CheckCircle2 className="h-4 w-4" />
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {item.description ? <p className="mt-2 text-xs leading-5 text-slate-500">{item.description}</p> : null}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ))}
                 </div>
               </div>
 
               <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
                 <div className="space-y-5">
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-slate-700">{t("Your name or seat")}</label>
-                    <Input value={guestLabel} onChange={(event) => setGuestLabel(event.target.value)} placeholder={t("Optional")} />
-                  </div>
-
                   {selectedItem && selectedItem.modifiers.length > 0 ? (
                     <div>
                       <label className="mb-2 block text-sm font-medium text-slate-700">{t("Drink modifications")}</label>
                       <div className="grid gap-2 sm:grid-cols-2">
-                        {selectedItem.modifiers.map((modifier) => (
-                          <button
-                            key={modifier.id}
-                            type="button"
-                            aria-pressed={selectedModifierIds.includes(modifier.id)}
-                            onClick={() =>
-                              setSelectedModifierIds((current) =>
-                                current.includes(modifier.id)
-                                  ? current.filter((id) => id !== modifier.id)
-                                  : [...current, modifier.id]
-                              )
-                            }
-                            className={`flex items-center justify-between gap-3 rounded-[18px] border px-4 py-3 text-left text-sm transition ${
-                              selectedModifierIds.includes(modifier.id)
-                                ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[0_14px_28px_-22px_rgba(37,87,229,0.45)]"
-                                : "border-[var(--line)] bg-slate-50 text-slate-700 hover:bg-white"
-                            }`}
-                          >
-                            {modifier.label}
-                            <span
-                              className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold ${
-                                selectedModifierIds.includes(modifier.id)
-                                  ? "border-[var(--accent)] bg-[var(--accent)] text-white"
-                                  : "border-slate-300 bg-white text-slate-400"
+                        {selectedItem.modifiers.map((modifier) => {
+                          const selected = selectedModifierIds.includes(modifier.id);
+                          return (
+                            <button
+                              key={modifier.id}
+                              type="button"
+                              aria-pressed={selected}
+                              onClick={() =>
+                                setSelectedModifierIds((current) =>
+                                  current.includes(modifier.id)
+                                    ? current.filter((id) => id !== modifier.id)
+                                    : [...current, modifier.id]
+                                )
+                              }
+                              className={`flex items-center justify-between gap-3 rounded-[18px] border px-4 py-3 text-left text-sm transition ${
+                                selected
+                                  ? "border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--accent)] shadow-[0_14px_28px_-22px_rgba(37,87,229,0.45)]"
+                                  : "border-[var(--line)] bg-slate-50 text-slate-700 hover:bg-white"
                               }`}
                             >
-                              {selectedModifierIds.includes(modifier.id) ? "✓" : "+"}
-                            </span>
-                          </button>
-                        ))}
+                              {modifier.label}
+                              <span
+                                className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold ${
+                                  selected
+                                    ? "border-[var(--accent)] bg-[var(--accent)] text-white"
+                                    : "border-slate-300 bg-white text-slate-400"
+                                }`}
+                              >
+                                {selected ? <Check className="h-3 w-3" /> : "+"}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   ) : null}
@@ -466,7 +511,7 @@ export function GuestOrderPage({
                           <p className="mt-1 text-lg font-semibold text-slate-950">{pendingDrinks.length}</p>
                         </div>
                       </div>
-                      <Button type="button" variant="secondary" onClick={addSelectedDrink}>
+                      <Button type="button" variant="secondary" disabled={!selectedSeat || !selectedItem} onClick={addSelectedDrink}>
                         <Plus className="mr-2 h-4 w-4" />
                         {t("Add drink")}
                       </Button>
@@ -479,6 +524,7 @@ export function GuestOrderPage({
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-sm font-semibold text-slate-950">{item.itemName}</p>
+                                {selectedSeat ? <p className="mt-1 text-sm font-medium text-slate-600">{t("Seat")} {selectedSeat.label}</p> : null}
                                 {item.modifierSummary ? <p className="mt-1 text-sm text-slate-500">{item.modifierSummary}</p> : null}
                                 {item.customNote ? <p className="mt-1 text-sm text-slate-500">{item.customNote}</p> : null}
                               </div>
@@ -502,7 +548,7 @@ export function GuestOrderPage({
                   <div className="rounded-[24px] bg-[linear-gradient(180deg,#ffffff,#f8fbff)] p-5 ring-1 ring-[var(--line)]">
                     <p className="text-sm leading-6 text-slate-600">{t("Submit one or more drinks together and track their status from the same screen.")}</p>
                     <div className="mt-4">
-                      <Button type="submit" disabled={saving || (!selectedItemId && pendingDrinks.length === 0)} className="w-full justify-center">
+                      <Button type="submit" disabled={saving || !selectedSeat || (!selectedItemId && pendingDrinks.length === 0)} className="w-full justify-center">
                         {saving ? t("Sending request...") : t("Submit drink request")}
                       </Button>
                     </div>
@@ -515,18 +561,6 @@ export function GuestOrderPage({
       </div>
     </main>
   );
-}
-
-function getGuestStatusLabel(status: DrinkOrderStatus) {
-  if (status === DrinkOrderStatus.PREPARING) {
-    return "Preparing";
-  }
-
-  if (status === DrinkOrderStatus.SERVED) {
-    return "Delivered";
-  }
-
-  return "Request received";
 }
 
 function GuestStatusBadge({

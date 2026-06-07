@@ -45,8 +45,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       where: { id },
       data: {
         ...parsed.data,
-        notes: parsed.data.notes || null
-      }
+        notes: parsed.data.notes || null,
+        seatLayoutConfig: parsed.data.seatLayoutConfig || null
+      } as never
     });
 
     return NextResponse.json(room);

@@ -146,7 +146,7 @@ export function PlannerPage({
         actions={
           user ? (
             <Link href="/bookings/new">
-              <Button className="!bg-white !text-slate-950 hover:!bg-white/90">
+              <Button className="dark-mode-white-button">
                 <CalendarPlus2 className="mr-2 h-4 w-4" />
                 {t(user.role === "ADMIN" ? "Create booking" : "Request booking")}
               </Button>

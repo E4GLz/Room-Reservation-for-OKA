@@ -9,6 +9,7 @@ export const roomSchema = z.object({
   capacity: z.coerce.number().int().min(1).max(500),
   location: z.string().min(2).max(80),
   notes: z.string().max(400).optional().or(z.literal("")),
+  seatLayoutConfig: z.string().max(12000).optional().or(z.literal("")),
   status: z.nativeEnum(RoomStatus)
 });
 
@@ -137,12 +138,16 @@ export const guestDrinkOrderItemSchema = z.object({
 export const guestDrinkOrderSchema = z.union([
   z.object({
     guestLabel: z.string().max(80).optional().or(z.literal("")),
+    seatKey: z.string().min(1).max(120),
+    seatLabel: z.string().min(1).max(120),
     menuItemId: z.string().min(1),
     selectedModifierIds: z.array(z.string()).max(10),
     customNote: z.string().max(240).optional().or(z.literal(""))
   }),
   z.object({
     guestLabel: z.string().max(80).optional().or(z.literal("")),
+    seatKey: z.string().min(1).max(120),
+    seatLabel: z.string().min(1).max(120),
     items: z.array(guestDrinkOrderItemSchema).min(1).max(8)
   })
 ]);

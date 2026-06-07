@@ -383,6 +383,7 @@ export function HospitalityAdminPage({
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-sm font-semibold text-slate-950">{formatOrderSummary(order)}</p>
+                            {order.seatLabel ? <p className="mt-1 text-sm font-medium text-slate-600">{t("Seat")} {order.seatLabel}</p> : null}
                             <p className="mt-1 text-sm text-slate-500">{order.reservation?.guestCompany || t("Active meeting")}</p>
                           </div>
                           <DrinkOrderStatusBadge status={order.status} t={t} />

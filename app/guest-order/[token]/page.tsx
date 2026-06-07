@@ -12,6 +12,8 @@ export default async function GuestOrderTokenPage({ params }: { params: Promise<
     notFound();
   }
 
+  const room = serviceToken.room as typeof serviceToken.room & { seatLayoutConfig?: string | null };
+
   const [reservation, menuItems] = await Promise.all([
     findActiveReservationForRoom(serviceToken.roomId),
     listVisibleMenuItems()
@@ -21,9 +23,11 @@ export default async function GuestOrderTokenPage({ params }: { params: Promise<
     <GuestOrderPage
       token={token}
       room={{
-        id: serviceToken.room.id,
-        name: serviceToken.room.name,
-        location: serviceToken.room.location
+        id: room.id,
+        name: room.name,
+        location: room.location,
+        capacity: room.capacity,
+        seatLayoutConfig: room.seatLayoutConfig ?? null
       }}
       reservation={
         reservation

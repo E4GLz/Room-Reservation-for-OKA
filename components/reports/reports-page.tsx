@@ -6,6 +6,7 @@ import { ChartCard } from "@/components/ui/chart-card";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { Card } from "@/components/ui/card";
 import { StatePanel } from "@/components/ui/state-panel";
+import { DrillDownModal, type DrillFilter } from "@/components/ui/drill-down-modal";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
 import type { ReportsPayload } from "@/lib/types";
@@ -13,6 +14,8 @@ import type { ReportsPayload } from "@/lib/types";
 export function ReportsPage({ data }: { data: ReportsPayload }) {
   const { user } = useSession();
   const { t } = useLanguage();
+  const [drillFilter, setDrillFilter] = useState<DrillFilter | null>(null);
+  const openDrill = (filter: DrillFilter) => setDrillFilter(filter);
   const pieColors = ["#16a34a", "#f59e0b", "#eab308", "#ef4444"];
   const trendBarColor = "#16a34a";
   const roomTypeBarColor = "#f97316";
@@ -67,10 +70,10 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
   return (
     <div className="space-y-6 px-8 py-6">
       <div className="grid gap-4 xl:grid-cols-4">
-        <KpiCard label={t("Active rooms")} value={data.activeRooms} />
-        <KpiCard label={t("Average attendees")} value={data.averageAttendees} />
-        <KpiCard label={t("Total bookings")} value={data.totalBookings} />
-        <KpiCard label={t("Occupied hours")} value={data.occupiedHours} meta={t("Total booked time across reservations")} />
+        <KpiCard label={t("Active rooms")} value={data.activeRooms} onClick={() => openDrill({ kind: "reservations", title: t("All reservations"), params: {} })} />
+        <KpiCard label={t("Average attendees")} value={data.averageAttendees} onClick={() => openDrill({ kind: "reservations", title: t("All reservations"), params: {} })} />
+        <KpiCard label={t("Total bookings")} value={data.totalBookings} onClick={() => openDrill({ kind: "reservations", title: t("Total bookings"), params: {} })} />
+        <KpiCard label={t("Occupied hours")} value={data.occupiedHours} meta={t("Total booked time across reservations")} onClick={() => openDrill({ kind: "reservations", title: t("Occupied hours"), params: {} })} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
@@ -116,7 +119,18 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
                     formatter={(value: number) => [value, t("Bookings")]}
                     labelFormatter={(_, payload) => formatTrendLabel(payload?.[0]?.payload, t)}
                   />
-                  <Bar dataKey="total" fill={trendBarColor} radius={[10, 10, 0, 0]} />
+                  <Bar
+                    dataKey="total"
+                    fill={trendBarColor}
+                    radius={[10, 10, 0, 0]}
+                    style={{ cursor: "pointer" }}
+                    onClick={(barData: { year?: number; month?: number; label?: string }) => {
+                      if (barData.year && barData.month) {
+                        const { start, end } = rptMonthRange(barData.year, barData.month);
+                        openDrill({ kind: "reservations", title: barData.label ?? t("Booking trend"), params: { start, end } });
+                      }
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -130,7 +144,11 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
           <div className="mt-4 space-y-3">
             {hasTopCompanies ? (
               data.topCompanies.map((company) => (
-                <div key={company.company} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
+                <div
+                  key={company.company}
+                  className="flex cursor-pointer items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 transition hover:bg-slate-100"
+                  onClick={() => openDrill({ kind: "reservations", title: company.company, params: { chargedCompany: company.company } })}
+                >
                   <span className="text-sm font-medium text-slate-700">{company.company}</span>
                   <span className="text-sm font-semibold text-slate-950">{company.total}</span>
                 </div>
@@ -155,7 +173,18 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
                     formatter={(value: number) => [`${value} ${t("hrs")}`, t("Occupied hours")]}
                     labelFormatter={(_, payload) => formatTrendLabel(payload?.[0]?.payload, t)}
                   />
-                  <Bar dataKey="hours" fill={occupiedHoursColor} radius={[10, 10, 0, 0]} />
+                  <Bar
+                    dataKey="hours"
+                    fill={occupiedHoursColor}
+                    radius={[10, 10, 0, 0]}
+                    style={{ cursor: "pointer" }}
+                    onClick={(barData: { year?: number; month?: number; label?: string }) => {
+                      if (barData.year && barData.month) {
+                        const { start, end } = rptMonthRange(barData.year, barData.month);
+                        openDrill({ kind: "reservations", title: barData.label ?? t("Occupied hours trend"), params: { start, end } });
+                      }
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -173,7 +202,15 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
                   <XAxis type="number" allowDecimals={false} />
                   <YAxis type="category" dataKey="name" width={92} />
                   <Tooltip formatter={(value: number) => [`${value} ${t("hrs")}`, t("Occupied hours")]} />
-                  <Bar dataKey="hours" fill={occupiedHoursColor} radius={[0, 10, 10, 0]} />
+                  <Bar
+                    dataKey="hours"
+                    fill={occupiedHoursColor}
+                    radius={[0, 10, 10, 0]}
+                    style={{ cursor: "pointer" }}
+                    onClick={(barData: { name?: string }) => {
+                      if (barData.name) openDrill({ kind: "reservations", title: barData.name, params: { roomName: barData.name } });
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -189,7 +226,17 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={data.reservationTypeMix} dataKey="total" nameKey="type" innerRadius={60} outerRadius={100}>
+                  <Pie
+                data={data.reservationTypeMix}
+                dataKey="total"
+                nameKey="type"
+                innerRadius={60}
+                outerRadius={100}
+                style={{ cursor: "pointer" }}
+                onClick={(entry: { type?: string }) => {
+                  if (entry.type) openDrill({ kind: "reservations", title: t(entry.type), params: { typeFilter: entry.type } });
+                }}
+              >
                     {data.reservationTypeMix.map((entry, index) => (
                       <Cell key={entry.type} fill={pieColors[index % pieColors.length]} />
                     ))}
@@ -213,7 +260,15 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
                   <XAxis dataKey="type" tickFormatter={(value) => t(String(value))} />
                   <YAxis allowDecimals={false} />
                   <Tooltip formatter={(value: number, name) => [value, t(String(name))]} />
-                  <Bar dataKey="total" fill={roomTypeBarColor} radius={[10, 10, 0, 0]} />
+                  <Bar
+                    dataKey="total"
+                    fill={roomTypeBarColor}
+                    radius={[10, 10, 0, 0]}
+                    style={{ cursor: "pointer" }}
+                    onClick={(barData: { type?: string }) => {
+                      if (barData.type) openDrill({ kind: "reservations", title: t(barData.type), params: { roomType: barData.type } });
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -225,10 +280,10 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
         <Card>
           <h3 className="text-lg font-semibold text-slate-950">{t("Additional insights")}</h3>
           <div className="mt-4 space-y-3">
-            <InsightRow label={t("Cancellation rate")} value={`${data.cancellationRate}%`} />
-            <InsightRow label={t("Food service bookings")} value={String(data.foodServiceCount)} />
-            <InsightRow label={t("Average attendees")} value={String(data.averageAttendees)} />
-            <InsightRow label={t("Hospitality orders")} value={String(data.hospitality.totalOrders)} />
+            <InsightRow label={t("Cancellation rate")} value={`${data.cancellationRate}%`} onClick={() => openDrill({ kind: "reservations", title: t("Cancelled bookings"), params: { status: "CANCELLED" } })} />
+            <InsightRow label={t("Food service bookings")} value={String(data.foodServiceCount)} onClick={() => openDrill({ kind: "reservations", title: t("Food service bookings"), params: { foodService: "true" } })} />
+            <InsightRow label={t("Average attendees")} value={String(data.averageAttendees)} onClick={() => openDrill({ kind: "reservations", title: t("All reservations"), params: {} })} />
+            <InsightRow label={t("Hospitality orders")} value={String(data.hospitality.totalOrders)} onClick={() => openDrill({ kind: "drinkOrders", title: t("Hospitality orders"), params: { history: "true" } })} />
           </div>
         </Card>
       </div>
@@ -239,7 +294,18 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={foodServiceData} dataKey="value" nameKey="name" innerRadius={60} outerRadius={100}>
+                  <Pie
+                    data={foodServiceData}
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={60}
+                    outerRadius={100}
+                    style={{ cursor: "pointer" }}
+                    onClick={(entry: { name?: string }) => {
+                      const isFoodService = entry.name === t("Food service requested");
+                      openDrill({ kind: "reservations", title: entry.name ?? t("Food service demand"), params: { foodService: isFoodService ? "true" : "false" } });
+                    }}
+                  >
                     {foodServiceData.map((entry, index) => (
                       <Cell key={entry.name} fill={pieColors[index % pieColors.length]} />
                     ))}
@@ -260,7 +326,11 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
               {data.hospitality.topItems.map((item) => {
                 const maxValue = Math.max(...data.hospitality.topItems.map((entry) => entry.total), 1);
                 return (
-                  <div key={item.name} className="rounded-[20px] bg-slate-50 p-3">
+                  <div
+                    key={item.name}
+                    className="cursor-pointer rounded-[20px] bg-slate-50 p-3 transition hover:bg-slate-100"
+                    onClick={() => openDrill({ kind: "drinkOrders", title: item.name, params: { itemName: item.name } })}
+                  >
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <p className="text-sm font-medium text-slate-800">{item.name}</p>
                       <p className="text-sm font-semibold text-slate-950">{item.total}</p>
@@ -280,13 +350,24 @@ export function ReportsPage({ data }: { data: ReportsPayload }) {
           )}
         </ChartCard>
       </div>
+      <DrillDownModal filter={drillFilter} onClose={() => setDrillFilter(null)} />
     </div>
   );
 }
 
-function InsightRow({ label, value }: { label: string; value: string }) {
+function rptMonthRange(year: number, month: number) {
+  return {
+    start: new Date(year, month - 1, 1).toISOString().split("T")[0],
+    end: new Date(year, month, 0).toISOString().split("T")[0]
+  };
+}
+
+function InsightRow({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
   return (
-    <div className="rounded-2xl bg-slate-50 px-4 py-3">
+    <div
+      className={`rounded-2xl bg-slate-50 px-4 py-3 ${onClick ? "cursor-pointer transition hover:bg-slate-100" : ""}`}
+      onClick={onClick}
+    >
       <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{label}</p>
       <p className="mt-2 text-lg font-semibold text-slate-950">{value}</p>
     </div>

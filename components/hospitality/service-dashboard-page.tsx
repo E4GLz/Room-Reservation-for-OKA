@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { DrinkOrderStatus, UserRole } from "@prisma/client";
 import { CheckCircle2, Clock3 } from "lucide-react";
+import { RoomSeatMap } from "@/components/hospitality/room-seat-map";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { StatePanel } from "@/components/ui/state-panel";
 import { useLanguage } from "@/components/providers/language-provider";
 import { useSession } from "@/components/providers/session-provider";
 import { readErrorMessage } from "@/lib/client-errors";
+import { parseRoomLayout } from "@/lib/room-layout";
 import type { DrinkOrderRecord } from "@/lib/types";
 
 type TodayMeetingRecord = {
@@ -101,6 +103,31 @@ export function ServiceDashboardPage({ initialRole }: { initialRole: UserRole })
       ] as const)
       .sort((left, right) => left[0].localeCompare(right[0]));
   }, [orders]);
+
+  const groupedSeatOrders = useMemo(
+    () =>
+      groupedOrders.map(([roomName, roomOrders]) => {
+        const seatGroups = new Map<string, DrinkOrderRecord[]>();
+
+        for (const order of roomOrders) {
+          const seatKey = order.seatKey ?? `unassigned-${order.id}`;
+          seatGroups.set(seatKey, [...(seatGroups.get(seatKey) ?? []), order]);
+        }
+
+        const groupedSeats = Array.from(seatGroups.entries())
+          .map(([seatKey, seatOrders]) => ({
+            seatKey,
+            seatLabel: seatOrders[0]?.seatLabel ?? t("Unassigned seat"),
+            guestLabel: seatOrders[0]?.guestLabel ?? "",
+            submittedAt: seatOrders[0]?.submittedAt ?? "",
+            orders: seatOrders
+          }))
+          .sort((left, right) => new Date(left.submittedAt).getTime() - new Date(right.submittedAt).getTime());
+
+        return [roomName, groupedSeats, roomOrders] as const;
+      }),
+    [groupedOrders, t]
+  );
 
   const serviceSummary = useMemo(() => {
     const servedOrders = orders.filter((order) => order.status === DrinkOrderStatus.SERVED && order.servedAt);
@@ -229,7 +256,7 @@ export function ServiceDashboardPage({ initialRole }: { initialRole: UserRole })
               </div>
             </Card>
 
-            {groupedOrders.map(([roomName, roomOrders]) => (
+            {groupedSeatOrders.map(([roomName, seatGroups, roomOrders]) => (
               <Card key={roomName}>
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -248,52 +275,64 @@ export function ServiceDashboardPage({ initialRole }: { initialRole: UserRole })
                     </span>
                   </div>
                 </div>
+                <div className="mt-4">
+                  <RoomServiceMap roomOrders={roomOrders} t={t} />
+                </div>
                 <div className="mt-4 space-y-3">
-                  {roomOrders.map((order) => (
-                    <div key={order.id} className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4">
+                  {seatGroups.map((seatGroup) => (
+                    <div key={seatGroup.seatKey} className="rounded-[20px] border border-[var(--line)] bg-slate-50 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-3 text-xs uppercase tracking-[0.14em] text-slate-500">
                             <span className="inline-flex items-center gap-1.5">
                               <Clock3 className="h-3.5 w-3.5" />
-                              {new Date(order.submittedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                              {new Date(seatGroup.submittedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                             </span>
                             <span>{roomName}</span>
-                            {order.guestReminderRequestedAt ? <ReminderBadge t={t} /> : null}
+                            <span>{t("Seat")} {seatGroup.seatLabel}</span>
+                            {seatGroup.orders.some((order) => order.guestReminderRequestedAt) ? <ReminderBadge t={t} /> : null}
                           </div>
-                          <p className="text-base font-semibold text-slate-950">{formatOrderSummary(order)}</p>
+                          {seatGroup.guestLabel ? <p className="text-sm font-medium text-slate-700">{seatGroup.guestLabel}</p> : null}
                           <p className="text-sm font-medium text-slate-600">
-                            {t("Elapsed time")}: {formatElapsedTime(order, now)}
+                            {t("Elapsed time")}: {formatElapsedTime(seatGroup.orders[0]!, now)}
                           </p>
-                          {order.status === DrinkOrderStatus.SERVED && order.servedAt ? (
-                            <p className="text-sm text-emerald-700">
-                              {t("Served at")}{" "}
-                              {new Date(order.servedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                            </p>
-                          ) : null}
+                          <div className="space-y-2">
+                            {seatGroup.orders.map((order) => (
+                              <div key={order.id} className="rounded-[16px] bg-white px-3 py-3 ring-1 ring-[var(--line)]">
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="text-sm font-semibold text-slate-950">{formatOrderSummary(order)}</p>
+                                    {order.status === DrinkOrderStatus.SERVED && order.servedAt ? (
+                                      <p className="mt-1 text-xs text-emerald-700">
+                                        {t("Served at")}{" "}
+                                        {new Date(order.servedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                                      </p>
+                                    ) : null}
+                                  </div>
+                                  <StatusBadge status={order.status} t={t} />
+                                </div>
+                                {order.status !== DrinkOrderStatus.SERVED ? (
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    <Button
+                                      variant="secondary"
+                                      disabled={order.status === DrinkOrderStatus.PREPARING || updatingOrderId === order.id}
+                                      onClick={() => void updateStatus(order.id, DrinkOrderStatus.PREPARING)}
+                                    >
+                                      {t("Preparing")}
+                                    </Button>
+                                    <Button disabled={updatingOrderId === order.id} onClick={() => void updateStatus(order.id, DrinkOrderStatus.SERVED)}>
+                                      {updatingOrderId === order.id ? t("Saving...") : t("Served")}
+                                    </Button>
+                                  </div>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
                         </div>
-                        <StatusBadge status={order.status} t={t} />
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-slate-600 ring-1 ring-[var(--line)]">
+                          {seatGroup.orders.length} {t("drinks")}
+                        </span>
                       </div>
-
-                      {order.status !== DrinkOrderStatus.SERVED ? (
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <Button
-                            variant="secondary"
-                            disabled={order.status === DrinkOrderStatus.PREPARING || updatingOrderId === order.id}
-                            onClick={() => void updateStatus(order.id, DrinkOrderStatus.PREPARING)}
-                          >
-                            {t("Preparing")}
-                          </Button>
-                          <Button disabled={updatingOrderId === order.id} onClick={() => void updateStatus(order.id, DrinkOrderStatus.SERVED)}>
-                            {updatingOrderId === order.id ? t("Saving...") : t("Served")}
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200">
-                          <CheckCircle2 className="h-4 w-4" />
-                          {t("Served and kept visible for this room today")}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -302,6 +341,40 @@ export function ServiceDashboardPage({ initialRole }: { initialRole: UserRole })
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function RoomServiceMap({
+  roomOrders,
+  t
+}: {
+  roomOrders: DrinkOrderRecord[];
+  t: (text: string) => string;
+}) {
+  const room = roomOrders[0]?.room;
+  const layout = parseRoomLayout(room?.seatLayoutConfig, room?.capacity ?? 8);
+  const highlightedSeatKeys = roomOrders
+    .filter((order) => order.seatKey)
+    .map((order) => order.seatKey as string);
+  const seatAnnotations = Object.fromEntries(
+    roomOrders
+      .filter((order) => order.seatKey)
+      .map((order) => [
+        order.seatKey as string,
+        order.guestLabel?.trim() || `${t("Seat")} ${order.seatLabel ?? ""}`.trim()
+      ])
+  );
+
+  return (
+    <div className="rounded-[24px] border border-[var(--line)] bg-slate-50 p-3">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-slate-600">{t("Seat map")}</p>
+        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-slate-500 ring-1 ring-[var(--line)]">
+          {highlightedSeatKeys.length} {t("active seats")}
+        </span>
+      </div>
+      <RoomSeatMap layout={layout} mode="preview" highlightedSeatKeys={highlightedSeatKeys} seatAnnotations={seatAnnotations} className="p-3" />
     </div>
   );
 }

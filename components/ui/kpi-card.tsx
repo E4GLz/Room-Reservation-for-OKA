@@ -9,18 +9,21 @@ export function KpiCard({
   value,
   meta,
   icon,
-  tone = "default"
+  tone = "default",
+  onClick
 }: {
   label: string;
   value: string | number;
   meta?: string;
   icon?: ReactNode;
   tone?: "default" | "accent" | "warning" | "soft";
+  onClick?: () => void;
 }) {
   const { t } = useLanguage();
 
   return (
     <Card
+      onClick={onClick}
       className={[
         "kpi-card",
         tone === "accent" ? "kpi-card--accent" : "",

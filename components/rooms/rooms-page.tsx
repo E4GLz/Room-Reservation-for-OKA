@@ -67,7 +67,7 @@ export function RoomsPage({ rooms }: { rooms: RoomRecord[] }) {
   return (
     <div className="space-y-6 px-8 py-6">
       <div className="flex justify-end">
-        <Button onClick={() => {
+        <Button className="dark-mode-white-button" onClick={() => {
           setEditingRoom(null);
           setShowCreate((current) => !current);
         }}>
@@ -93,7 +93,7 @@ export function RoomsPage({ rooms }: { rooms: RoomRecord[] }) {
                 <p className="text-xs uppercase tracking-[0.18em] text-slate-500">{room.code}</p>
                 <h3 className="mt-2 text-xl font-semibold text-slate-950">{room.name}</h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  {room.type} | {room.location}
+                  {t(room.type)} | {room.location}
                 </p>
               </div>
               <Badge label={room.status} tone={room.status === RoomStatus.ACTIVE ? "bg-emerald-100 text-emerald-800 ring-emerald-200" : "bg-slate-200 text-slate-700 ring-slate-300"} />

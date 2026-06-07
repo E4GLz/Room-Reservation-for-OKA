@@ -16,6 +16,98 @@ import { reservationSchema } from "@/lib/validation";
 import { ReservationInput } from "@/lib/types";
 export const dynamic = 'force-dynamic';
 
+function buildReservationWhere(
+  params: {
+    start: string | null;
+    end: string | null;
+    roomId: string | null;
+    requesterEmail: string | null;
+    status: string | null;
+    search: string | null;
+    typeFilter: string | null;
+    chargedCompany: string | null;
+    roomName: string | null;
+    roomType: string | null;
+    foodService: string | null;
+  },
+  legacy: boolean
+): object {
+  const {
+    start,
+    end,
+    roomId,
+    requesterEmail,
+    status,
+    search,
+    typeFilter,
+    chargedCompany,
+    roomName,
+    roomType,
+    foodService
+  } = params;
+
+  const orConditions: object[] = [];
+
+  if (typeFilter) {
+    orConditions.push({
+      OR: legacy
+        ? [{ eventType: typeFilter }]
+        : [{ reservationType: typeFilter }, { eventType: typeFilter }]
+    });
+  }
+
+  if (search) {
+    orConditions.push({
+      OR: legacy
+        ? [{ bookingCompany: { contains: search } }, { meetingName: { contains: search } }]
+        : [
+            { guestCompany: { contains: search } },
+            { chargedCompany: { contains: search } },
+            { chargedDepartment: { contains: search } }
+          ]
+    });
+  }
+
+  const textFilter =
+    orConditions.length === 0
+      ? {}
+      : orConditions.length === 1
+        ? orConditions[0]
+        : { AND: orConditions };
+
+  return {
+    ...(start || end
+      ? legacy
+        ? {
+            reservationDate: {
+              ...(start ? { gte: new Date(start) } : {}),
+              ...(end ? { lte: new Date(end) } : {})
+            }
+          }
+        : {
+            AND: [
+              ...(end ? [{ reservationDate: { lte: new Date(end) } }] : []),
+              ...(start ? [{ reservationEndDate: { gte: new Date(start) } }] : [])
+            ]
+          }
+      : {}),
+    ...(roomId ? { roomId } : {}),
+    ...(requesterEmail ? { requesterEmail } : {}),
+    ...(status ? { bookingStatus: status as BookingStatus } : {}),
+    ...(!legacy && chargedCompany ? { chargedCompany } : {}),
+    ...(foodService !== null ? { foodServiceRequired: foodService === "true" } : {}),
+    ...((roomName || roomType)
+      ? {
+          room: {
+            ...(roomName ? { name: roomName } : {}),
+            ...(roomType ? { type: roomType } : {})
+          }
+        }
+      : {}),
+    ...textFilter
+  };
+}
+
 export async function GET(request: Request) {
   const auth = await requireApiUser();
   if (auth.response || !auth.user) {
@@ -29,34 +121,36 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
   const search = searchParams.get("search");
   const requestedRequesterEmail = searchParams.get("requesterEmail");
-  const requesterEmail = auth.user.role === "ADMIN" ? requestedRequesterEmail : auth.user.email;
+  const requesterEmail =
+    auth.user.role === "ADMIN" ? requestedRequesterEmail : auth.user.email;
+
+  // Drill-down filter params
+  const typeFilter = searchParams.get("typeFilter");
+  const chargedCompany = searchParams.get("chargedCompany");
+  const roomName = searchParams.get("roomName");
+  const roomType = searchParams.get("roomType");
+  const foodService = searchParams.get("foodService");
+  const weekdayParam = searchParams.get("weekday");
+
+  const filterParams = {
+    start,
+    end,
+    roomId,
+    requesterEmail,
+    status,
+    search,
+    typeFilter,
+    chargedCompany,
+    roomName,
+    roomType,
+    foodService
+  };
 
   let reservations;
 
   try {
     reservations = await prisma.reservation.findMany({
-      where: {
-        ...(start || end
-          ? {
-              AND: [
-                ...(end ? [{ reservationDate: { lte: new Date(end) } }] : []),
-                ...(start ? [{ reservationEndDate: { gte: new Date(start) } }] : [])
-              ]
-            }
-          : {}),
-        ...(roomId ? { roomId } : {}),
-        ...(requesterEmail ? { requesterEmail } : {}),
-        ...(status ? { bookingStatus: status as BookingStatus } : {}),
-        ...(search
-          ? {
-              OR: [
-                { guestCompany: { contains: search } },
-                { chargedCompany: { contains: search } },
-                { chargedDepartment: { contains: search } }
-              ]
-            }
-          : {})
-      },
+      where: buildReservationWhere(filterParams, false),
       include: {
         room: true,
         auditEntries: {
@@ -71,27 +165,7 @@ export async function GET(request: Request) {
     }
 
     reservations = await prisma.reservation.findMany({
-      where: {
-        ...(start || end
-          ? {
-              reservationDate: {
-                ...(start ? { gte: new Date(start) } : {}),
-                ...(end ? { lte: new Date(end) } : {})
-              }
-            }
-          : {}),
-        ...(roomId ? { roomId } : {}),
-        ...(requesterEmail ? { requesterEmail } : {}),
-        ...(status ? { bookingStatus: status as BookingStatus } : {}),
-        ...(search
-          ? {
-              OR: [
-                { bookingCompany: { contains: search } },
-                { meetingName: { contains: search } }
-              ]
-            }
-          : {})
-      },
+      where: buildReservationWhere(filterParams, true),
       include: {
         room: true,
         auditEntries: {
@@ -100,6 +174,16 @@ export async function GET(request: Request) {
       },
       orderBy: [{ reservationDate: "asc" }, { startTime: "asc" }]
     });
+  }
+
+  // Weekday filter (applied in JS since Prisma has no day-of-week filter)
+  if (weekdayParam) {
+    const weekdayIndex = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekdayParam);
+    if (weekdayIndex >= 0) {
+      reservations = reservations.filter(
+        (r) => new Date(r.reservationDate).getDay() === weekdayIndex
+      );
+    }
   }
 
   return NextResponse.json(reservations.map(serializeReservation));

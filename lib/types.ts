@@ -32,6 +32,7 @@ export type UserRecord = AppUser & {
 };
 
 export type RoomRecord = Omit<Room, 'createdAt' | 'updatedAt'> & {
+  seatLayoutConfig?: string | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 };
@@ -114,6 +115,8 @@ export type DrinkOrderRecord = {
   roomServiceTokenId: string | null;
   menuItemId: string;
   guestLabel?: string | null;
+  seatKey?: string | null;
+  seatLabel?: string | null;
   itemNameSnapshot: string;
   modifierSummary?: string | null;
   customNote?: string | null;
@@ -275,6 +278,7 @@ export type RoomFormValues = {
   capacity: number;
   location: string;
   notes?: string;
+  seatLayoutConfig?: string;
   status: RoomStatus;
 };
 
@@ -349,6 +353,8 @@ export type MenuItemFormValues = {
 
 export type GuestOrderPayload = {
   guestLabel?: string;
+  seatKey: string;
+  seatLabel: string;
   menuItemId: string;
   selectedModifierIds: string[];
   customNote?: string;

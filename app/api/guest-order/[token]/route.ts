@@ -11,13 +11,17 @@ export async function GET(_: Request, { params }: { params: Promise<{ token: str
     return NextResponse.json({ error: "This room ordering page is unavailable." }, { status: 404 });
   }
 
+  const room = serviceToken.room as typeof serviceToken.room & { seatLayoutConfig?: string | null };
+
   const activeReservation = await findActiveReservationForRoom(serviceToken.roomId);
 
   return NextResponse.json({
     room: {
-      id: serviceToken.room.id,
-      name: serviceToken.room.name,
-      location: serviceToken.room.location
+      id: room.id,
+      name: room.name,
+      location: room.location,
+      capacity: room.capacity,
+      seatLayoutConfig: room.seatLayoutConfig ?? null
     },
     reservation: activeReservation
       ? {
@@ -52,6 +56,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   const normalizedData = parsed.data as {
     guestLabel?: string;
+    seatKey: string;
+    seatLabel: string;
     menuItemId?: string;
     selectedModifierIds?: string[];
     customNote?: string;
@@ -107,10 +113,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
           roomServiceTokenId: serviceToken.id,
           menuItemId: menuItem.id,
           guestLabel: normalizedData.guestLabel || null,
+          seatKey: normalizedData.seatKey,
+          seatLabel: normalizedData.seatLabel,
           itemNameSnapshot: menuItem.name,
           modifierSummary: modifierSummary || null,
           customNote: item.customNote || null
-        },
+        } as never,
         include: {
           room: true,
           menuItem: {

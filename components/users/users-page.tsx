@@ -166,7 +166,7 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
                   .filter((entry) => entry.id !== editingUser?.id)
                   .map((entry) => (
                     <option key={entry.id} value={entry.id}>
-                      {entry.name} ({getRoleLabel(entry.role)})
+                      {entry.name} ({t(getRoleLabel(entry.role))})
                     </option>
                   ))}
               </Select>
@@ -208,8 +208,8 @@ export function UsersPage({ users }: { users: UserRecord[] }) {
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{getRoleLabel(entry.role)}</p>
-                <p className="mt-1 text-xs font-medium text-slate-600">{entry.status}</p>
+                <p className="text-xs uppercase tracking-[0.14em] text-slate-500">{t(getRoleLabel(entry.role))}</p>
+                <p className="mt-1 text-xs font-medium text-slate-600">{t(entry.status === UserStatus.ACTIVE ? "Active" : "Inactive")}</p>
                 {entry.role === UserRole.STANDARD && entry.status === UserStatus.INACTIVE ? (
                   <p className="mt-2 inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-amber-800 ring-1 ring-amber-200">
                     {t("Pending approval")}
