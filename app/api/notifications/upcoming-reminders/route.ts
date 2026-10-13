@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { getDashboardData } from "@/lib/dashboard";
 import { createAuditEntry } from "@/lib/reservations";
@@ -104,24 +105,53 @@ async function runUpcomingReminderDispatch() {
       sentCount,
       skippedCount,
       totalQueued: data.upcomingAdminReminders.length,
-      recipientEmails: data.adminReminderConfig.recipientEmails
+      // Deliberately a count, not the addresses — this response should never
+      // echo admin email addresses back to the caller.
+      recipientCount: data.adminReminderConfig.recipientEmails.length
     }
   };
 }
 
-export async function GET(request: Request) {
+// This route is reachable without a session (see PUBLIC paths in middleware.ts)
+// because it is triggered by an external cron scheduler. It therefore has to do
+// its own authorization, and must fail CLOSED: if CRON_SECRET is not set we
+// refuse the request rather than dispatching email to every admin.
+function authorizeCronRequest(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET is not configured on the server." },
+      { status: 503 }
+    );
+  }
+
+  const provided = Buffer.from(request.headers.get("authorization") ?? "");
+  const expected = Buffer.from(`Bearer ${cronSecret}`);
+
+  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  return null;
+}
+
+export async function GET(request: Request) {
+  const unauthorized = authorizeCronRequest(request);
+  if (unauthorized) {
+    return unauthorized;
   }
 
   const result = await runUpcomingReminderDispatch();
   return NextResponse.json(result.body, { status: result.status });
 }
 
-export async function POST() {
+export async function POST(request: Request) {
+  const unauthorized = authorizeCronRequest(request);
+  if (unauthorized) {
+    return unauthorized;
+  }
+
   const result = await runUpcomingReminderDispatch();
   return NextResponse.json(result.body, { status: result.status });
 }

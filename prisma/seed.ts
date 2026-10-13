@@ -7,6 +7,14 @@ const prisma = new PrismaClient();
 const adminEmail = process.env.ADMIN_EMAIL;
 const adminPassword = process.env.ADMIN_PASSWORD;
 
+// Declared before main() runs. A `const` arrow function is not hoisted, so
+// defining this below the main() call would leave it in the temporal dead zone.
+const hashPassword = (password: string) => {
+  const salt = randomBytes(16).toString("hex");
+  const hash = scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+};
+
 async function main() {
   const existingSettings = await prisma.appSettings.findUnique({
     where: { id: "default" },
@@ -61,9 +69,3 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
-
-const hashPassword = (password: string) => {
-  const salt = randomBytes(16).toString("hex");
-  const hash = scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
-};

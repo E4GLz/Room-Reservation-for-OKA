@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiRole } from "@/lib/server-auth";
 
+// Types that are safe to render inline in a browser. Notably excludes SVG,
+// which can carry script.
+const SAFE_INLINE_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif"
+]);
+
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const prismaWithStoredFile = prisma as typeof prisma & {
@@ -30,15 +39,30 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
     }
   }
 
+  // "drink-image" files are the only ones served publicly and inline, so the
+  // stored content type is not trusted here: anything that is not a known-safe
+  // image is downgraded to a non-renderable type and forced to download. That
+  // stops an uploaded HTML/SVG payload from executing on this origin.
+  const isPublicImage = file.kind === "drink-image";
+  const isSafeImage = SAFE_INLINE_IMAGE_TYPES.has(file.contentType ?? "");
+  const serveInline = isPublicImage && isSafeImage;
+
+  const contentType = serveInline
+    ? (file.contentType as string)
+    : isPublicImage
+      ? "application/octet-stream"
+      : file.contentType || "application/octet-stream";
+
   return new NextResponse(Buffer.from(file.bytes), {
     status: 200,
     headers: {
-      "Content-Type": file.contentType || "application/octet-stream",
+      "Content-Type": contentType,
       "Content-Length": String(file.size),
-      "Content-Disposition": file.kind === "drink-image"
+      "Content-Disposition": serveInline
         ? `inline; filename="${encodeURIComponent(file.originalName)}"`
         : `attachment; filename="${encodeURIComponent(file.originalName)}"`,
-      "Cache-Control": file.kind === "drink-image" ? "public, max-age=3600" : "private, no-store"
+      "X-Content-Type-Options": "nosniff",
+      "Cache-Control": isPublicImage ? "public, max-age=3600" : "private, no-store"
     }
   });
 }

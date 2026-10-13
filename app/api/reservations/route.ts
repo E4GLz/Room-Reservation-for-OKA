@@ -46,10 +46,21 @@ function buildReservationWhere(
     foodService
   } = params;
 
-  const orConditions: object[] = [];
+  // Every condition that must be ANDed goes into this one array. Spreading more
+  // than one `AND` key into the same object would silently drop all but the last.
+  const andConditions: object[] = [];
+
+  if (!legacy && (start || end)) {
+    if (end) {
+      andConditions.push({ reservationDate: { lte: new Date(end) } });
+    }
+    if (start) {
+      andConditions.push({ reservationEndDate: { gte: new Date(start) } });
+    }
+  }
 
   if (typeFilter) {
-    orConditions.push({
+    andConditions.push({
       OR: legacy
         ? [{ eventType: typeFilter }]
         : [{ reservationType: typeFilter }, { eventType: typeFilter }]
@@ -57,7 +68,7 @@ function buildReservationWhere(
   }
 
   if (search) {
-    orConditions.push({
+    andConditions.push({
       OR: legacy
         ? [{ bookingCompany: { contains: search } }, { meetingName: { contains: search } }]
         : [
@@ -68,28 +79,14 @@ function buildReservationWhere(
     });
   }
 
-  const textFilter =
-    orConditions.length === 0
-      ? {}
-      : orConditions.length === 1
-        ? orConditions[0]
-        : { AND: orConditions };
-
   return {
-    ...(start || end
-      ? legacy
-        ? {
-            reservationDate: {
-              ...(start ? { gte: new Date(start) } : {}),
-              ...(end ? { lte: new Date(end) } : {})
-            }
+    ...(legacy && (start || end)
+      ? {
+          reservationDate: {
+            ...(start ? { gte: new Date(start) } : {}),
+            ...(end ? { lte: new Date(end) } : {})
           }
-        : {
-            AND: [
-              ...(end ? [{ reservationDate: { lte: new Date(end) } }] : []),
-              ...(start ? [{ reservationEndDate: { gte: new Date(start) } }] : [])
-            ]
-          }
+        }
       : {}),
     ...(roomId ? { roomId } : {}),
     ...(requesterEmail ? { requesterEmail } : {}),
@@ -104,7 +101,7 @@ function buildReservationWhere(
           }
         }
       : {}),
-    ...textFilter
+    ...(andConditions.length > 0 ? { AND: andConditions } : {})
   };
 }
 

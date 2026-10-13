@@ -42,6 +42,7 @@ export async function GET() {
   const roomTypeMap = new Map<string, number>();
   const roomHoursMap = new Map<string, number>();
   const monthHoursMap = new Map<string, number>();
+  let totalOccupiedHours = 0;
 
   activeReservations.forEach((reservation) => {
     const chargedCompany =
@@ -58,6 +59,7 @@ export async function GET() {
     const hours = computeOccupiedHours(
       reservation as typeof reservation & { reservationEndDate?: Date | null }
     );
+    totalOccupiedHours += hours;
     roomHoursMap.set(
       reservation.room.name,
       Number(((roomHoursMap.get(reservation.room.name) ?? 0) + hours).toFixed(1))
@@ -102,6 +104,7 @@ export async function GET() {
   return NextResponse.json({
     activeRooms: rooms.filter((room) => room.status === "ACTIVE").length,
     totalBookings: activeReservations.length,
+    occupiedHours: Number(totalOccupiedHours.toFixed(1)),
     averageAttendees: activeReservations.length
       ? Math.round(
           activeReservations.reduce((sum, r) => sum + r.attendeesCount, 0) /
