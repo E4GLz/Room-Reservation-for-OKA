@@ -45,3 +45,8 @@ exports/
 
 # Generated document/presentation build artifacts
 outputs/
+
+# Legacy filesystem uploads. Attachments are stored in the database
+# (StoredFile) and served through /api/uploads/[id] behind an auth check.
+# Never commit real attachments: anything under public/ is served publicly.
+public/uploads/

@@ -22,11 +22,14 @@ function isPublicApiPath(pathname: string) {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Static assets bypass the session check. Note there is deliberately no
+  // "/uploads" entry here: attachments live in the database and are served by
+  // /api/uploads/[id], which authorizes each request. Files placed under
+  // public/ are served to anyone, so real attachments must never go there.
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon") ||
     pathname.startsWith("/branding") ||
-    pathname.startsWith("/uploads") ||
     pathname.includes(".")
   ) {
     return NextResponse.next();
