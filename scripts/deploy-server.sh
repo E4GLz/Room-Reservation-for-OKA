@@ -49,20 +49,13 @@ log "Validating .env"
 # and sourcing would execute arbitrary content).
 envval() { sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" .env | head -1 | sed 's/^"//; s/"$//'; }
 
-for key in DATABASE_URL SESSION_SECRET APP_DOMAIN; do
+for key in DATABASE_URL SESSION_SECRET TUNNEL_TOKEN; do
   [ -n "$(envval "$key")" ] || die "$key is missing or empty in .env"
 done
-ok "DATABASE_URL, SESSION_SECRET, APP_DOMAIN all present"
+ok "DATABASE_URL, SESSION_SECRET, TUNNEL_TOKEN all present"
 
 APP_DOMAIN_VALUE="$(envval APP_DOMAIN)"
-case "$APP_DOMAIN_VALUE" in
-  localhost|127.0.0.1|"")
-    die "APP_DOMAIN is '$APP_DOMAIN_VALUE'. Set it to your real hostname, otherwise Caddy
-       cannot obtain a trusted certificate — and without HTTPS the session cookie is
-       marked Secure and browsers will refuse to send it, so nobody can log in."
-    ;;
-esac
-ok "APP_DOMAIN = $APP_DOMAIN_VALUE"
+ok "APP_DOMAIN = ${APP_DOMAIN_VALUE:-(unset)}"
 
 # DATABASE_URL must not point at localhost: inside the container that resolves
 # to the container itself, not this host.
@@ -74,8 +67,7 @@ case "$(envval DATABASE_URL)" in
 esac
 ok "DATABASE_URL does not use localhost"
 
-[ -f Caddyfile ] || die "Caddyfile not found — Caddy cannot start without it."
-ok "Caddyfile present"
+ok "routing via Cloudflare Tunnel (no inbound ports required)"
 
 # ─── 3. Build ─────────────────────────────────────────────────────────
 APP_IMAGE_VALUE="$(envval APP_IMAGE)"
@@ -108,8 +100,10 @@ $COMPOSE ps
 
 if [ "$READY" = "1" ]; then
   ok "application is responding on 127.0.0.1:3000"
-  printf '\n\033[1;32mDeployed.\033[0m Site: https://%s\n' "$APP_DOMAIN_VALUE"
-  printf 'Caddy may take up to a minute to finish issuing the TLS certificate.\n\n'
+  printf '\n\033[1;32mDeployed.\033[0m Site: https://%s\n\n' "$APP_DOMAIN_VALUE"
+  printf 'If the hostname does not serve yet, check that the tunnel is healthy and\n'
+  printf 'that its public hostname routes to http://app:3000 (not localhost:3000):\n'
+  printf '  %s logs -f cloudflared\n\n' "$COMPOSE"
   printf 'Logs:    %s logs -f app\n'   "$COMPOSE"
   printf 'Restart: %s restart app\n\n' "$COMPOSE"
 else

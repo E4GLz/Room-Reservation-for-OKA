@@ -150,7 +150,7 @@ const s1 = [
   h1("1. Document Scope"),
   para("This document is the technical reference for IT staff responsible for running and maintaining the OKA Room Reservation Platform. It covers the codebase structure, environment setup, how to bring the system up using Docker, database migration management, external system integrations, and ongoing operations."),
   sp(60),
-  para("The application is containerised and ready to run. IT staff do not need to manage the Node.js process, a web server, or a reverse proxy directly — Docker Compose brings up the application together with Caddy, which terminates HTTPS automatically. PostgreSQL runs on a separate database server and is reached over the network; it is not part of the Compose stack."),
+  para("The application is containerised and ready to run. IT staff do not need to manage the Node.js process, a web server, or a reverse proxy directly — Docker Compose brings up the application together with cloudflared, which connects outbound to Cloudflare and publishes the site over HTTPS without any inbound port being opened. PostgreSQL runs on a separate database server and is reached over the network; it is not part of the Compose stack."),
   sp(60),
   note("IMPORTANT: The .env file contains credentials and secrets. It must never be committed to version control, stored in shared drives without encryption, or transmitted over unsecured channels."),
   pg()
@@ -231,7 +231,7 @@ const s3 = [
       ["Database","PostgreSQL 14+","External server reached over the network via DATABASE_URL. Not part of the Compose stack."],
       ["Authentication","Custom signed session cookies","Email/password only — no OAuth or external identity provider"],
       ["Email","Nodemailer via SMTP","Compatible with any standards-compliant SMTP relay"],
-      ["Reverse Proxy","Caddy 2","Handles HTTPS automatically; configured via Caddyfile"],
+      ["Public access","Cloudflare Tunnel (cloudflared)","Outbound-only connection to Cloudflare. TLS terminates at the Cloudflare edge; no inbound port is opened."],
       ["Charts","Recharts","Client-side rendering; no server dependency"]
     ],
     [2200,2600,4560]
@@ -244,12 +244,12 @@ const s3 = [
     ["Service","Docker Image","Role"],
     [
       ["app","Pre-built application image","Runs the Next.js application on port 3000, bound to localhost only. Automatically applies database migrations and seeds the admin account on startup."],
-      ["caddy","caddy:2-alpine","Reverse proxy handling inbound traffic on ports 80 and 443. Terminates HTTPS using a certificate it obtains and renews automatically, then forwards requests to the app service. Configured via Caddyfile."]
+      ["cloudflared","cloudflare/cloudflared","Maintains an outbound tunnel to Cloudflare and forwards incoming requests to the app service. Routing is configured remotely in the Cloudflare dashboard, which must point the public hostname at http://app:3000."]
     ],
     [1400,2400,5560]
   ),
   sp(80),
-  note("Only the Caddy service publishes public ports (80 and 443). The application is bound to 127.0.0.1:3000 so it cannot be reached directly from outside the host. The app container requires outbound network access to the PostgreSQL server on port 5432."),
+  note("No inbound ports are opened on this host. The application binds to 127.0.0.1:3000 for local health checks only, and all public traffic arrives through the Cloudflare tunnel. The host requires outbound access to Cloudflare and to the PostgreSQL server on port 5432."),
   pg()
 ];
 
@@ -286,7 +286,8 @@ const s5 = [
   tbl(
     ["Variable","Purpose","Example / Notes","Req."],
     [
-      ["APP_DOMAIN","Public hostname Caddy serves on. Caddy obtains and renews a TLS certificate for this domain automatically. DNS for it must already point at this host.","rooms.obeikan.com","Yes"],
+      ["APP_DOMAIN","Public hostname of the service. Informational: the tunnel routes traffic, so this is used for reference and health output.","oka-room-reservation.com","Yes"],
+      ["TUNNEL_TOKEN","Cloudflare Tunnel token, from Zero Trust > Networks > Tunnels > Install connector. Grants the connector access to the tunnel, so treat it as a secret.","eyJhIjoi...","Yes"],
       ["APP_IMAGE","Docker image name and tag for the application container.","oka-reservation:latest","Yes"],
       ["DATABASE_URL","Connection string for the external PostgreSQL server. Must be a host the app container can reach over the network — not localhost, which would resolve to the container itself.","postgresql://oka_user:password@db-host:5432/room_reservation","Yes"],
       ["SESSION_SECRET","Cryptographic secret for signing session cookies. Must be at least 32 random characters. Changing this logs out all active users.","Generate with: node -e \"console.log(require('crypto').randomBytes(48).toString('hex'))\"","Yes"],
@@ -326,7 +327,7 @@ const s5 = [
     ["Compose Reference","Source","Purpose"],
     [
       ["${APP_IMAGE}",".env","Application image to run. Defaults to oka-reservation:latest if unset."],
-      ["{$APP_DOMAIN}",".env, read by Caddyfile","Hostname Caddy serves and requests a TLS certificate for."],
+      ["${TUNNEL_TOKEN}",".env","Authenticates the cloudflared connector against the Cloudflare tunnel."],
       ["env_file: .env",".env","Passes every application variable (DATABASE_URL, SMTP, secrets) into the app container."]
     ],
     [2600,2400,4360]
@@ -345,7 +346,7 @@ const s5 = [
 // ═════════════════════════════════════════════════════════════════════
 const s6 = [
   h1("6. Running the Application with Docker"),
-  para("The application and the Caddy reverse proxy are managed through Docker Compose and start with a single command. PostgreSQL is hosted separately and is not started or managed by Compose."),
+  para("The application and the Cloudflare tunnel connector are managed through Docker Compose and start with a single command. PostgreSQL is hosted separately and is not started or managed by Compose."),
   sp(60),
   h2("6.1 First-Time Setup"),
   h3("Step 1 — Clone the Repository"),
@@ -373,15 +374,15 @@ const s6 = [
   para("Start the full stack in detached mode:"),
   code("docker-compose up -d"),
   sp(60),
-  para("On startup the app container automatically applies any pending database migrations and seeds the admin account before the web server begins accepting traffic. Caddy starts alongside it and begins requesting a TLS certificate for APP_DOMAIN."),
+  para("On startup the app container automatically applies any pending database migrations and seeds the admin account before the web server begins accepting traffic. cloudflared starts alongside it and establishes the outbound tunnel to Cloudflare."),
   sp(80),
   h2("6.2 Verifying the Stack is Running"),
   code("docker-compose ps"),
   sp(60),
-  para("Both services (app and caddy) should show status 'running'. To view the application startup logs:"),
+  para("Both services (app and cloudflared) should show status 'running'. To view the application startup logs:"),
   code("docker-compose logs app"),
   sp(60),
-  para("A successful startup shows the Prisma migration output followed by a 'Ready' message from Next.js. The application is then accessible at the domain configured in your Caddyfile (or http://localhost if running locally)."),
+  para("A successful startup shows the Prisma migration output followed by a 'Ready' message from Next.js. The application is then accessible at the tunnel public hostname configured in the Cloudflare dashboard."),
   sp(80),
   h2("6.3 Common Docker Compose Commands"),
   sp(60),
@@ -390,7 +391,7 @@ const s6 = [
     [
       ["`docker-compose up -d`","Start all services in the background"],
       ["`docker-compose down`","Stop and remove containers (data volumes are preserved)"],
-      ["`docker-compose down -v`","Stop containers and delete Caddy's volumes, including issued TLS certificates. Application data is unaffected — it lives on the external database server."],
+      ["`docker-compose down`","Stop and remove the containers. Application data is unaffected: it lives on the external database server."],
       ["`docker-compose restart app`","Restart only the application container"],
       ["`docker-compose logs -f app`","Stream live logs from the application container"],
       ["`docker-compose logs -f`","Stream live logs from all services"],
@@ -594,7 +595,7 @@ const s11 = [
   bul("Prefer an encrypted connection to the database. Append ?sslmode=require to DATABASE_URL if the server supports TLS."),
   sp(80),
   h2("11.3 HTTPS"),
-  para("HTTPS is handled automatically by the Caddy service using the domain configured in the Caddyfile. Caddy obtains and renews TLS certificates automatically via Let's Encrypt. Ensure ports 80 and 443 are open and the domain has a valid DNS record pointing to the host before starting the stack."),
+  para("HTTPS is provided by Cloudflare at its edge, and the tunnel connection from this host is outbound only. No inbound port needs to be opened and no certificate is managed on the server. Because the browser always reaches the site over HTTPS, the Secure session cookie is transmitted correctly."),
   pg()
 ];
 
@@ -608,7 +609,7 @@ const s12 = [
   code("docker-compose logs app              # all app logs"),
   code("docker-compose logs -f app          # stream live app logs"),
   code("docker-compose logs -f              # stream all services"),
-  code("docker-compose logs caddy           # proxy / TLS logs"),
+  code("docker-compose logs cloudflared     # tunnel connectivity logs"),
   sp(80),
   h2("12.2 What to Monitor"),
   sp(60),
@@ -628,7 +629,7 @@ const s12 = [
   para("To verify the application is running and accepting requests:"),
   code("curl -s http://localhost:3000/api/auth/session"),
   sp(60),
-  para("A healthy application returns a JSON response. A connection refused or 502 error indicates the app container is not running or Caddy cannot reach it."),
+  para("A healthy application returns a JSON response. A connection refused error indicates the app container is not running."),
   pg()
 ];
 
@@ -648,9 +649,9 @@ const s13 = [
       ["Emails not being delivered","Incorrect SMTP credentials, SMTP port blocked, or server rejecting connections","Verify SMTP_* variables in .env. Test SMTP connectivity independently. Check if the sending IP is on a blocklist."],
       ["Reminder emails not being sent","Cron job misconfigured or CRON_SECRET does not match","Test manually: curl -X POST https://your-domain/api/notifications/upcoming-reminders -H 'Authorization: Bearer YOUR_SECRET'"],
       ["All users logged out after container restart","SESSION_SECRET was changed in .env","Expected behaviour. Users must log in again. Avoid changing SESSION_SECRET unless rotating for security reasons."],
-      ["Caddy returns 502 Bad Gateway","The app container is not running or is still starting","Run docker-compose ps and docker-compose logs app. Wait for the Next.js ready message before accessing the app."],
+      ["Cloudflare returns 502 or 1033","The tunnel is down, or its public hostname points somewhere wrong","Run docker-compose logs cloudflared. In the dashboard confirm the hostname routes to http://app:3000 — not localhost:3000, which inside the connector means the connector itself."],
       ["Admin account does not exist after first start","ADMIN_EMAIL or ADMIN_PASSWORD not set in .env when the container first started","Set the variables in .env and recreate the container: docker-compose up -d --force-recreate app"],
-      ["docker-compose up fails with 'port already in use'","Another service is using port 80 or 443 on the host","Identify and stop the conflicting service, or change the host port mappings in docker-compose.yaml."]
+      ["docker-compose up fails with 'port already in use'","Another process is bound to 127.0.0.1:3000 on the host","Identify it with: ss -ltnp | grep 3000. Stop it, or change the host port mapping in docker-compose.yaml."]
     ],
     [2600,2800,3960]
   ),

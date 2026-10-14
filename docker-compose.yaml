@@ -1,42 +1,48 @@
 # OKA Room Reservation Platform
 #
-# PostgreSQL is NOT part of this stack: the application connects to the external
-# database server configured in DATABASE_URL (.env). The app container only
-# needs outbound access to that host on port 5432.
+# Public access is provided by Cloudflare Tunnel. cloudflared dials OUT to
+# Cloudflare, so no inbound port needs to be opened on this host — ports 80 and
+# 443 stay closed. Cloudflare terminates TLS at its edge, which is what allows
+# the Secure session cookie to work.
+#
+# PostgreSQL is NOT part of this stack. The app connects to the external
+# database server configured in DATABASE_URL and only needs outbound access
+# to it on port 5432.
+#
+# In the Cloudflare dashboard (Zero Trust > Networks > Tunnels), the tunnel's
+# public hostname must route to:
+#
+#     http://app:3000
+#
+# Not localhost:3000 — inside the cloudflared container, localhost is that
+# container. "app" is this Compose service name and resolves on the shared
+# network.
 #
 # Start:  docker-compose up -d
 # Logs:   docker-compose logs -f app
 
 services:
-  caddy:
-    image: caddy:2-alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    # Caddy needs .env so it can resolve {$APP_DOMAIN} from the Caddyfile.
-    env_file:
-      - .env
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-    restart: unless-stopped
-
   app:
     # Override by setting APP_IMAGE in .env, or build locally with:
     #   docker build -t oka-reservation:latest .
     image: ${APP_IMAGE:-oka-reservation:latest}
-    # Bound to localhost only. Public traffic arrives via Caddy on 80/443.
-    # Keeping the loopback binding allows the documented health check:
-    #   curl http://localhost:3000/api/auth/session
+    # Loopback only. Public traffic arrives through the tunnel, not this port.
+    # Kept bound so the documented health check still works:
+    #   curl http://127.0.0.1:3000/api/auth/session
     ports:
       - "127.0.0.1:3000:3000"
     env_file:
       - .env
     restart: unless-stopped
 
-volumes:
-  caddy_data:
-  caddy_config:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    # The token identifies the tunnel and carries its credentials. Routing is
+    # managed remotely in the Cloudflare dashboard, so there is no local
+    # config file to maintain.
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - app
+    restart: unless-stopped
