@@ -18,6 +18,10 @@ databases:
     databaseName: room_reservation
     user: oka_user
     plan: free
+    # MUST match the web service's region. Internal networking only works
+    # within a region, so a mismatch here means the app cannot reach the
+    # database at all — and the error looks like a generic connection failure.
+    region: frankfurt
     # Empty means NO external connections: only the web service reaches it, over
     # Render's internal network. That is the safe default and should stay this
     # way in normal operation.
