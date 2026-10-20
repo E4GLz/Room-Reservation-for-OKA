@@ -7,17 +7,21 @@
 # The container entrypoint runs `prisma migrate deploy && npm run seed` before
 # starting, so a freshly created database builds its own schema on first boot.
 #
-# PLANS: both resources start on `free` so nothing is charged while you
-# evaluate. Two limits matter before this carries real bookings:
-#   - a free database is REMOVED AFTER 30 DAYS
-#   - a free web service sleeps after 15 minutes idle (~50s to wake)
-# Change both to `starter` (about $7/month each) for anything people rely on.
+# PLANS: both resources are on the smallest PAID tier, because the free tier
+# deletes the database after 30 days and puts the web service to sleep after
+# 15 minutes idle. Plan names are resource-based (<cpu>c-<memory>), not the
+# old starter/standard names.
+#
+# If the service restarts with out-of-memory errors, move the web service up
+# to 1c-2g. Current usage is small — 19 MB of data, ~5,900 reservations — but
+# the dashboard and reports endpoints load the full reservation set into
+# memory to compute their aggregates, so headroom is worth watching.
 
 databases:
   - name: oka-reservation-db
     databaseName: room_reservation
     user: oka_user
-    plan: free
+    plan: 0.1c-256mb
     # MUST match the web service's region. Internal networking only works
     # within a region, so a mismatch here means the app cannot reach the
     # database at all — and the error looks like a generic connection failure.
@@ -37,7 +41,7 @@ services:
     name: oka-reservation
     runtime: docker
     dockerfilePath: ./Dockerfile
-    plan: free
+    plan: 0.5c-512mb
     region: frankfurt
     branch: main
     healthCheckPath: /api/auth/session
